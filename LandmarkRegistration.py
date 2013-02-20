@@ -17,7 +17,7 @@ class LandmarkRegistration:
     landmarks (paired fiducials) to assist in manual registration.
     """
     parent.acknowledgementText = """
-    This file was developed by Steve Pieper, Isomics, Inc. 
+    This file was developed by Steve Pieper, Isomics, Inc.
     It was partially funded by NIH grant 3P41RR013218-12S1
     and this work is part of the National Alliance for Medical Image
     Computing (NAMIC), funded by the National Institutes of Health
@@ -187,8 +187,8 @@ class LandmarkRegistrationWidget:
   def onLayout(self):
     volumeNodes = []
     viewNames = []
-    volumeViews = ( ('Moving', self.movingSelector), 
-                    ('Fixed', self.fixedSelector), 
+    volumeViews = ( ('Moving', self.movingSelector),
+                    ('Fixed', self.fixedSelector),
                     ('Warped', self.warpedSelector) )
     for name, selector in volumeViews:
       volumeNode = selector.currentNode()
@@ -198,7 +198,7 @@ class LandmarkRegistrationWidget:
     mode = self.layoutComboBox.currentText
     import CompareVolumes
     logic = CompareVolumes.CompareVolumesLogic()
-    oneViewModes = ('Axial', 'Sagittal', 'Coronal',) 
+    oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
     if mode in oneViewModes:
       logic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=mode)
 
@@ -255,7 +255,7 @@ class LandmarkRegistrationWidget:
     except Exception, e:
       import traceback
       traceback.print_exc()
-      qt.QMessageBox.warning(slicer.util.mainWindow(), 
+      qt.QMessageBox.warning(slicer.util.mainWindow(),
           "Reload and Test", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
 
@@ -264,7 +264,7 @@ class Landmark:
   A convenience class for keeping track of landmarks, which
   are multiple related fiducials.
   """
-  
+
   def __init__(self):
     self.name = "Landmark"
     self.fixedFiducialID = None
@@ -345,7 +345,7 @@ class Landmarks:
 
   def renameLandmark(self):
     newName = qt.QInputDialog.getText(
-        slicer.util.mainWindow(), "Rename Landmark", 
+        slicer.util.mainWindow(), "Rename Landmark",
         "New name for landmark '%s'?" % self.selectedLandmark)
     if newName != "":
       self.landmarks[self.landmarks.index(self.selectedLandmark)] = newName
@@ -360,8 +360,8 @@ class Landmarks:
 #
 
 class LandmarkRegistrationLogic:
-  """This class should implement all the actual 
-  computation done by your module.  The interface 
+  """This class should implement all the actual
+  computation done by your module.  The interface
   should be such that other python code can import
   this class and make use of the functionality without
   requiring an instance of the Widget
@@ -370,7 +370,7 @@ class LandmarkRegistrationLogic:
     pass
 
   def hasImageData(self,volumeNode):
-    """This is a dummy logic method that 
+    """This is a dummy logic method that
     returns true if the passed in volume
     node has valid image data
     """
@@ -381,6 +381,89 @@ class LandmarkRegistrationLogic:
       print('no image data')
       return False
     return True
+
+  def addLandmark(self,position=(0,0,0),associatedNode=None):
+    """Add an instance of a landmark to the scene"""
+
+    annoLogic = slicer.modules.annotations.logic()
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
+
+    # make the fiducial list if required
+    if True:
+      listName = associatedNode.GetName() + "-landmarks"
+      fidListHierarchyNode = slicer.vtkMRMLAnnotationHierarchyNode()
+      fidListHierarchyNode.HideFromEditorsOff()
+      fidListHierarchyNode.SetName(listName)
+      slicer.mrmlScene.AddNode(fidListHierarchyNode)
+      # make it a child of the top level node
+      fidListHierarchyNode.SetParentNodeID(annoLogic.GetTopLevelHierarchyNodeID())
+      # and make it active so that the fids will be added to it
+      annoLogic.SetActiveHierarchyNodeID(fidListHierarchyNode.GetID())
+
+    fiducialNode = slicer.vtkMRMLAnnotationFiducialNode()
+    fiducialNode.SetName("New Anno")
+    fiducialNode.AddControlPoint(position, True, True)
+    slicer.mrmlScene.AddNode(fiducialNode)
+
+    C = """
+  // now iterate through the list and make fiducials
+  int numFids = node->GetNumberOfFiducials();
+  double *color = node->GetColor();
+  double *selColor = node->GetSelectedColor();
+  double symbolScale = node->GetSymbolScale();
+  double textScale = node->GetTextScale();
+  int locked = node->GetLocked();
+  int glyphType = node->GetGlyphType();
+  for (int n = 0; n < numFids; n++)
+    {
+    float *xyz = node->GetNthFiducialXYZ(n);
+    int sel = node->GetNthFiducialSelected(n);
+    int vis = node->GetNthFiducialVisibility(n);
+    const char *labelText = node->GetNthFiducialLabelText(n);
+
+    // now make an annotation
+    vtkMRMLAnnotationFiducialNode * fnode = vtkMRMLAnnotationFiducialNode::New();
+    fnode->SetName(labelText);
+    double coord[3] = {(double)xyz[0], (double)xyz[1], (double)xyz[2]};
+    fnode->AddControlPoint(coord, sel, vis);
+    fnode->SetSelected(sel);
+    fnode->SetLocked(locked);
+
+    this->GetMRMLScene()->AddNode(fnode);
+    if (n != 0)
+      {
+      idList += std::string(",");
+      }
+    idList += std::string(fnode->GetID());
+    fnode->CreateAnnotationTextDisplayNode();
+    fnode->CreateAnnotationPointDisplayNode();
+    fnode->SetTextScale(textScale);
+    fnode->GetAnnotationPointDisplayNode()->SetGlyphScale(symbolScale);
+    fnode->GetAnnotationPointDisplayNode()->SetGlyphType(glyphType);
+    fnode->GetAnnotationPointDisplayNode()->SetColor(color);
+    fnode->GetAnnotationPointDisplayNode()->SetSelectedColor(selColor);
+    fnode->GetAnnotationTextDisplayNode()->SetColor(color);
+    fnode->GetAnnotationTextDisplayNode()->SetSelectedColor(selColor);
+    fnode->SetDisplayVisibility(vis);
+    fnode->Delete();
+    }
+  // clean up
+  fidListHierarchyNode->Delete();
+  // remove the legacy node
+  this->GetMRMLScene()->RemoveNode(node->GetStorageNode());
+  this->GetMRMLScene()->RemoveNode(node);
+
+  // turn off batch processing
+  this->GetMRMLScene()->EndState(vtkMRMLScene::BatchProcessState);
+
+  if (idList.length())
+    {
+    nodeID = (char *)malloc(sizeof(char) * (idList.length() + 1));
+    strcpy(nodeID, idList.c_str());
+    }
+  return nodeID;
+  """
+
 
   def run(self,inputVolume,outputVolume):
     """
@@ -447,5 +530,8 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w = LandmarkRegistrationWidget()
     w.fixedSelector.setCurrentNode(mrHead)
     w.movingSelector.setCurrentNode(dtiBrain)
+
+    logic = LandmarkRegistrationLogic()
+    landmark = logic.addLandmark(position=(10, 0, -.5),associatedNode=mrHead)
 
     self.delayDisplay('Test passed!')
