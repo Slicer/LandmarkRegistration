@@ -403,66 +403,23 @@ class LandmarkRegistrationLogic:
     fiducialNode = slicer.vtkMRMLAnnotationFiducialNode()
     fiducialNode.SetName("New Anno")
     fiducialNode.AddControlPoint(position, True, True)
+    fiducialNode.SetSelected(True)
+    fiducialNode.SetLocked(False)
     slicer.mrmlScene.AddNode(fiducialNode)
 
-    C = """
-  // now iterate through the list and make fiducials
-  int numFids = node->GetNumberOfFiducials();
-  double *color = node->GetColor();
-  double *selColor = node->GetSelectedColor();
-  double symbolScale = node->GetSymbolScale();
-  double textScale = node->GetTextScale();
-  int locked = node->GetLocked();
-  int glyphType = node->GetGlyphType();
-  for (int n = 0; n < numFids; n++)
-    {
-    float *xyz = node->GetNthFiducialXYZ(n);
-    int sel = node->GetNthFiducialSelected(n);
-    int vis = node->GetNthFiducialVisibility(n);
-    const char *labelText = node->GetNthFiducialLabelText(n);
+    fiducialNode.CreateAnnotationTextDisplayNode();
+    fiducialNode.CreateAnnotationPointDisplayNode();
+    # TODO: pick appropriate defaults
+    #fiducialNode.SetTextScale(textScale);
+    #fiducialNode.GetAnnotationPointDisplayNode()->SetGlyphScale(symbolScale);
+    #fiducialNode.GetAnnotationPointDisplayNode()->SetGlyphType(glyphType);
+    #fiducialNode.GetAnnotationPointDisplayNode()->SetColor(color);
+    #fiducialNode.GetAnnotationPointDisplayNode()->SetSelectedColor(selColor);
+    #fiducialNode.GetAnnotationTextDisplayNode()->SetColor(color);
+    #fiducialNode.GetAnnotationTextDisplayNode()->SetSelectedColor(selColor);
+    fiducialNode.SetDisplayVisibility(True);
 
-    // now make an annotation
-    vtkMRMLAnnotationFiducialNode * fnode = vtkMRMLAnnotationFiducialNode::New();
-    fnode->SetName(labelText);
-    double coord[3] = {(double)xyz[0], (double)xyz[1], (double)xyz[2]};
-    fnode->AddControlPoint(coord, sel, vis);
-    fnode->SetSelected(sel);
-    fnode->SetLocked(locked);
-
-    this->GetMRMLScene()->AddNode(fnode);
-    if (n != 0)
-      {
-      idList += std::string(",");
-      }
-    idList += std::string(fnode->GetID());
-    fnode->CreateAnnotationTextDisplayNode();
-    fnode->CreateAnnotationPointDisplayNode();
-    fnode->SetTextScale(textScale);
-    fnode->GetAnnotationPointDisplayNode()->SetGlyphScale(symbolScale);
-    fnode->GetAnnotationPointDisplayNode()->SetGlyphType(glyphType);
-    fnode->GetAnnotationPointDisplayNode()->SetColor(color);
-    fnode->GetAnnotationPointDisplayNode()->SetSelectedColor(selColor);
-    fnode->GetAnnotationTextDisplayNode()->SetColor(color);
-    fnode->GetAnnotationTextDisplayNode()->SetSelectedColor(selColor);
-    fnode->SetDisplayVisibility(vis);
-    fnode->Delete();
-    }
-  // clean up
-  fidListHierarchyNode->Delete();
-  // remove the legacy node
-  this->GetMRMLScene()->RemoveNode(node->GetStorageNode());
-  this->GetMRMLScene()->RemoveNode(node);
-
-  // turn off batch processing
-  this->GetMRMLScene()->EndState(vtkMRMLScene::BatchProcessState);
-
-  if (idList.length())
-    {
-    nodeID = (char *)malloc(sizeof(char) * (idList.length() + 1));
-    strcpy(nodeID, idList.c_str());
-    }
-  return nodeID;
-  """
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
 
   def run(self,inputVolume,outputVolume):
@@ -533,5 +490,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
     logic = LandmarkRegistrationLogic()
     landmark = logic.addLandmark(position=(10, 0, -.5),associatedNode=mrHead)
+
+    landmark = logic.addLandmark(position=(0, 0, 0),associatedNode=dtiBrain)
 
     self.delayDisplay('Test passed!')
