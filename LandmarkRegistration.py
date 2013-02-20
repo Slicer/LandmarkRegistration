@@ -49,6 +49,7 @@ class LandmarkRegistrationWidget:
   def __init__(self, parent = None):
     self.logic = LandmarkRegistrationLogic()
     self.sliceNodesByViewName = {}
+    self.sliceNodesByVolumeID = {}
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -137,6 +138,7 @@ class LandmarkRegistrationWidget:
     # Landmark Widget
     #
     self.landmarks = Landmarks(self.logic)
+    self.landmarks.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
     parametersFormLayout.addRow(self.landmarks.widget)
 
     #
@@ -183,6 +185,12 @@ class LandmarkRegistrationWidget:
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
     if mode in oneViewModes:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=mode)
+
+    self.sliceNodesByVolumeID = {}
+    if self.sliceNodesByViewName:
+      for viewName,sliceNode in self.sliceNodesByViewName.iteritems():
+        volumeID = self.volumeSelectors[viewName].currentNodeId
+        self.sliceNodesByVolumeID[volumeID] = sliceNode
     self.restrictLandmarksToViews()
 
   def restrictLandmarksToViews(self):
@@ -190,19 +198,28 @@ class LandmarkRegistrationWidget:
     for the volume on which they were defined"""
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
-      sliceNodesByVolumeID = {}
-      for viewName,sliceNode in self.sliceNodesByViewName.iteritems():
-        volumeID = self.volumeSelectors[viewName].currentNodeId
-        sliceNodesByVolumeID[volumeID] = sliceNode
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
       for fidList in landmarks.values():
         for fid in fidList:
+          displayNode = fid.GetDisplayNode()
+          displayNode.RemoveAllViewNodeIDs()
           volumeNodeID = fid.GetAttribute("AssociatedNodeID")
           if volumeNodeID:
-            if sliceNodesByVolumeID.has_key(volumeNodeID):
-              displayNode = fid.GetDisplayNode()
-              displayNode.RemoveAllViewNodeIDs()
-              displayNode.AddViewNodeID(sliceNodesByVolumeID[volumeNodeID].GetID())
+            if self.sliceNodesByVolumeID.has_key(volumeNodeID):
+              displayNode.AddViewNodeID(self.sliceNodesByVolumeID[volumeNodeID].GetID())
+
+  def onLandmarkPicked(self,landmarkName):
+    """Jump all slice views such that the selected landmark
+    is visible"""
+    volumeNodes = self.currentVolumeNodes()
+    fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
+    landmarksFiducials = fiducialsByName[landmarkName]
+    for fid in landmarksFiducials:
+      volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+      if self.sliceNodesByVolumeID.has_key(volumeNodeID):
+        point = [0,]*3
+        fid.GetFiducialCoordinates(point)
+        self.sliceNodesByVolumeID[volumeNodeID].JumpSliceByCentering(*point)
 
   def onApplyButton(self):
     print("Run the algorithm")
@@ -272,6 +289,7 @@ class Landmarks:
     self.selectedLandmark = None # a landmark name
     self.landmarkGroupBox = None # a QGroupBox
     self.buttons = {} # the current buttons in the group box
+    self.connections = {} # list of slots per signal
 
     self.widget = qt.QWidget()
     self.layout = qt.QFormLayout(self.widget)
@@ -279,6 +297,18 @@ class Landmarks:
     self.landmarkArrayHolder.setLayout(qt.QVBoxLayout())
     self.layout.addRow(self.landmarkArrayHolder)
     self.updateLandmarkArray()
+
+  def connect(self,signal,slot):
+    """pseudo-connect - signal is arbitrary string and slot if callable"""
+    if not self.connections.has_key(signal):
+      self.connections[signal] = []
+    self.connections[signal].append(slot)
+
+  def emit(self,signal,args):
+    """pseudo-emit - calls any slots connected to signal"""
+    if self.connections.has_key(signal):
+      for slot in self.connections[signal]:
+        slot(args)
 
   def setVolumeNodes(self,volumeNodes):
     """Set up the widget to reflect the currently selected
@@ -325,6 +355,7 @@ class Landmarks:
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
     self.removeButton.enabled = True
+    self.emit("LandmarkPicked(landmarkName)", landmarkName)
 
   def addLandmark(self):
     import time
@@ -406,7 +437,7 @@ class LandmarkRegistrationLogic:
 
   def volumeFiducialsAsList(self,volumeNode):
     """return a list of annotation nodes that are
-    children of the list associated with the given 
+    children of the list associated with the given
     volume node"""
     children = []
     listName = volumeNode.GetName() + "-landmarks"
@@ -420,7 +451,7 @@ class LandmarkRegistrationLogic:
 
   def landmarksForVolumes(self,volumeNodes):
     """Return a dictionary of fiducial node lists, where each element
-    is a list of the ids of fiducials with matching names in 
+    is a list of the ids of fiducials with matching names in
     the landmark lists for each of the given volumes.
     Only fiducials that exist for all volumes are returned."""
     fiducialsByName = {}
