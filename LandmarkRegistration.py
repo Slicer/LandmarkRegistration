@@ -192,6 +192,7 @@ class LandmarkRegistrationWidget:
         volumeID = self.volumeSelectors[viewName].currentNodeId
         self.sliceNodesByVolumeID[volumeID] = sliceNode
     self.restrictLandmarksToViews()
+    self.onLandmarkPicked(self.landmarks.selectedLandmark)
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
@@ -213,13 +214,14 @@ class LandmarkRegistrationWidget:
     is visible"""
     volumeNodes = self.currentVolumeNodes()
     fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
-    landmarksFiducials = fiducialsByName[landmarkName]
-    for fid in landmarksFiducials:
-      volumeNodeID = fid.GetAttribute("AssociatedNodeID")
-      if self.sliceNodesByVolumeID.has_key(volumeNodeID):
-        point = [0,]*3
-        fid.GetFiducialCoordinates(point)
-        self.sliceNodesByVolumeID[volumeNodeID].JumpSliceByCentering(*point)
+    if fiducialsByName.has_key(landmarkName):
+      landmarksFiducials = fiducialsByName[landmarkName]
+      for fid in landmarksFiducials:
+        volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+        if self.sliceNodesByVolumeID.has_key(volumeNodeID):
+          point = [0,]*3
+          fid.GetFiducialCoordinates(point)
+          self.sliceNodesByVolumeID[volumeNodeID].JumpSliceByCentering(*point)
 
   def onApplyButton(self):
     print("Run the algorithm")
@@ -542,5 +544,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
     landmark = logic.addFiducial("tip-of-nose", position=(0, 0, 0),associatedNode=dtiBrain)
     landmark = logic.addFiducial("middle-of-left-eye", position=(23, 0, -.95),associatedNode=dtiBrain)
+
+    w.onSelect()
+    w.onLayout()
+    w.onLandmarkPicked('tip-of-nose')
 
     self.delayDisplay('Test passed!')
