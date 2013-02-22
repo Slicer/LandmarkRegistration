@@ -99,8 +99,8 @@ class LandmarkRegistrationWidget:
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
     self.volumeSelectors = {}
-    viewNames = ("Moving", "Fixed", "Transformed")
-    for viewName in viewNames:
+    self.viewNames = ("Moving", "Fixed", "Transformed")
+    for viewName in self.viewNames:
       self.volumeSelectors[viewName] = slicer.qMRMLNodeComboBox()
       self.volumeSelectors[viewName].nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
       self.volumeSelectors[viewName].selectNodeUponCreation = False
@@ -272,19 +272,19 @@ class LandmarkRegistrationWidget:
 
   def onLayout(self, layoutMode=None):
     volumeNodes = []
-    viewNames = []
-    for name, selector in self.volumeSelectors.iteritems():
-      volumeNode = selector.currentNode()
+    activeViewNames = []
+    for viewName in self.viewNames:
+      volumeNode = self.volumeSelectors[viewName].currentNode()
       if volumeNode:
         volumeNodes.append(volumeNode)
-        viewNames.append(name)
+        activeViewNames.append(viewName)
     if not layoutMode:
       layoutMode = self.layoutComboBox.currentText
     import CompareVolumes
     compareLogic = CompareVolumes.CompareVolumesLogic()
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
     if layoutMode in oneViewModes:
-      self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=layoutMode)
+      self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarks.selectedLandmark)
 
@@ -312,9 +312,12 @@ class LandmarkRegistrationWidget:
           transform = self.linearTransformSelector.currentNode()
         transformed = self.volumeSelectors['Transformed'].currentNode()
         if not transformed:
-          self.volumeSelectors['Transformed'].addNode()
-          transformed = self.volumeSelectors['Transformed'].currentNode()
-        self.logic.enableLinearRegistration(fixed,moving,transform,transformed)
+          volumesLogic = slicer.modules.volumes.logic()
+          transformedName = "%s-transformed" % moving.GetName()
+          transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+          self.volumeSelectors['Transformed'].currentNode(transformed)
+        landmarks = self.logic.landmarksForVolumes((fixed,moving))
+        self.logic.enableLinearRegistration(fixed,moving,landmarks,transform,transformed)
 
   def onLinearTransform(self):
     """Call this whenever linear transform needs to be updated"""
@@ -629,9 +632,27 @@ class LandmarkRegistrationLogic:
         fiducialsByName.__delitem__(childName)
     return fiducialsByName
 
-  def enableLinearRegistration(self,fixed,moving,transform,transformed):
+  def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     print("enable")
+    self.performLinearRegistration(self,fixed,moving,landmarks,transform,transformed)
+    # TODO: set up observers on fixed and moving fiducial
     pass
+
+  def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
+    transformed.SetAndObserveMatrixTransformToParent(transform.GetID())
+    landmarkTransform = vtk.vtkLandmarkTransform()
+    points = {}
+    point = [0,]*3
+    for volumeNode in (fixed,moving):
+      points[volumeNode] = vtk.vtkPoints()
+      points[volumeNode].Allocate(len(landmarks[volumeNode]),0)
+      for fid in landmarks[volumeNode]:
+        fid.GetFiducialCoordinates(point)
+        points[volumeNode].InsertNextPoint(point)
+    landmarkTransform.SetSourceLandmarks(points[moving])
+    landmarkTransform.SetTargetLandmarks(points[fixed])
+    landmarkTransform.Update()
+    transform.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
 
   def disableLinearRegistration(self):
     print("disable")
