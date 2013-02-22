@@ -123,16 +123,24 @@ class LandmarkRegistrationWidget:
     #
     layout = qt.QHBoxLayout()
     self.layoutComboBox = qt.QComboBox()
-    self.layoutComboBox.addItem('Axial')
-    self.layoutComboBox.addItem('Sagittal')
-    self.layoutComboBox.addItem('Coronal')
-    #self.layoutComboBox.addItem('Axial/Sagittal/Coronal')
-    #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
-    layout.addWidget(self.layoutComboBox)
-    self.layoutButton = qt.QPushButton('Layout')
-    self.layoutButton.connect('clicked()', self.onLayout)
-    layout.addWidget(self.layoutButton)
-    parametersFormLayout.addRow("Layout Mode: ", layout)
+    if True:
+      # combo box version
+      self.layoutComboBox.addItem('Axial')
+      self.layoutComboBox.addItem('Sagittal')
+      self.layoutComboBox.addItem('Coronal')
+      #self.layoutComboBox.addItem('Axial/Sagittal/Coronal')
+      #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
+      layout.addWidget(self.layoutComboBox)
+      self.layoutButton = qt.QPushButton('Layout')
+      self.layoutButton.connect('clicked()', self.onLayout)
+      layout.addWidget(self.layoutButton)
+    else:
+      modes = ( ('Ax', 'Axial'), ('Sg', 'Sagittal'), ('Cr', 'Coronal'),)
+      for label,mode in modes:
+        button = qt.QPushButton(label)
+        button.connect('clicked()',lambda m=mode: self.onLayout(mode))
+        layout.addWidget(button)
+    parametersFormLayout.addRow("Orientation: ", layout)
 
     #
     # Landmark Widget
@@ -171,7 +179,7 @@ class LandmarkRegistrationWidget:
     volumeNodes = self.currentVolumeNodes()
     self.landmarks.setVolumeNodes(volumeNodes)
 
-  def onLayout(self):
+  def onLayout(self, layoutMode=None):
     volumeNodes = []
     viewNames = []
     for name, selector in self.volumeSelectors.iteritems():
@@ -179,20 +187,24 @@ class LandmarkRegistrationWidget:
       if volumeNode:
         volumeNodes.append(volumeNode)
         viewNames.append(name)
-    mode = self.layoutComboBox.currentText
+    if not layoutMode:
+      layoutMode = self.layoutComboBox.currentText
     import CompareVolumes
     compareLogic = CompareVolumes.CompareVolumesLogic()
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
-    if mode in oneViewModes:
-      self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=mode)
+    if layoutMode in oneViewModes:
+      self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=layoutMode)
+    self.updateSliceNodesByVolumeID()
+    self.onLandmarkPicked(self.landmarks.selectedLandmark)
 
+  def updateSliceNodesByVolumeID(self):
+    """Build a mapping to look up the right slice
+    node that is currently displaying a given volumeID"""
     self.sliceNodesByVolumeID = {}
     if self.sliceNodesByViewName:
       for viewName,sliceNode in self.sliceNodesByViewName.iteritems():
         volumeID = self.volumeSelectors[viewName].currentNodeId
         self.sliceNodesByVolumeID[volumeID] = sliceNode
-    self.restrictLandmarksToViews()
-    self.onLandmarkPicked(self.landmarks.selectedLandmark)
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
@@ -212,6 +224,8 @@ class LandmarkRegistrationWidget:
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
+    self.restrictLandmarksToViews()
+    self.updateSliceNodesByVolumeID()
     volumeNodes = self.currentVolumeNodes()
     fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
     if fiducialsByName.has_key(landmarkName):
@@ -360,26 +374,35 @@ class Landmarks:
     self.emit("LandmarkPicked(landmarkName)", landmarkName)
 
   def addLandmark(self):
-    import time
-    newLandmark = 'new' + str(time.time())
-    self.landmarks.append(newLandmark)
+    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
+    index = 0
+    while True:
+      landmarkName = 'L-%d' % index
+      if not landmarkName in landmarks.keys():
+        break
+      index += 1
+    for volumeNode in self.volumeNodes:
+      fiducial = self.logic.addFiducial(landmarkName, position=(0, 0, 0),associatedNode=volumeNode)
     self.updateLandmarkArray()
-    self.pickLandmark(newLandmark)
+    self.pickLandmark(landmarkName)
 
   def removeLandmark(self):
-    self.landmarks.remove(self.selectedLandmark)
+    self.logic.removeLandmarkForVolumes(self.selectedLandmark, self.volumeNodes)
     self.selectedLandmark = None
     self.updateLandmarkArray()
 
   def renameLandmark(self):
-    newName = qt.QInputDialog.getText(
-        slicer.util.mainWindow(), "Rename Landmark",
-        "New name for landmark '%s'?" % self.selectedLandmark)
-    if newName != "":
-      self.landmarks[self.landmarks.index(self.selectedLandmark)] = newName
-      self.selectedLandmark = newName
-      self.updateLandmarkArray()
-      self.pickLandmark(newName)
+    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
+    if landmarks.has_key(self.selectedLandmark):
+      newName = qt.QInputDialog.getText(
+          slicer.util.mainWindow(), "Rename Landmark",
+          "New name for landmark '%s'?" % self.selectedLandmark)
+      if newName != "":
+        for fiducial in landmarks[self.selectedLandmark]:
+          fiducial.SetName(newName)
+        self.selectedLandmark = newName
+        self.updateLandmarkArray()
+        self.pickLandmark(newName)
 
 
 
@@ -435,6 +458,16 @@ class LandmarkRegistrationLogic:
     fiducialNode.GetAnnotationPointDisplayNode().SetGlyphTypeFromString('StarBurst2D')
     fiducialNode.SetDisplayVisibility(True)
 
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
+
+  def removeLandmarkForVolumes(self,landmark,volumeNodes):
+    """Remove the fiducial nodes from all the volumes.
+    TODO: remove lingering hierarchy nodes"""
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
+    landmarks = self.landmarksForVolumes(volumeNodes)
+    if landmarks.has_key(landmark):
+      for fid in landmarks[landmark]:
+        slicer.mrmlScene.RemoveNode(fid)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
   def volumeFiducialsAsList(self,volumeNode):
