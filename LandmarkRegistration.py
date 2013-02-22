@@ -96,12 +96,10 @@ class LandmarkRegistrationWidget:
     parametersCollapsibleButton = ctk.ctkCollapsibleButton()
     parametersCollapsibleButton.text = "Parameters"
     self.layout.addWidget(parametersCollapsibleButton)
-
-    # Layout within the dummy collapsible button
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
     self.volumeSelectors = {}
-    viewNames = ("Moving", "Fixed", "Warped")
+    viewNames = ("Moving", "Fixed", "Transformed")
     for viewName in viewNames:
       self.volumeSelectors[viewName] = slicer.qMRMLNodeComboBox()
       self.volumeSelectors[viewName].nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
@@ -115,8 +113,9 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors[viewName].setToolTip( "Pick the %s volume." % viewName.lower() )
       parametersFormLayout.addRow("%s Volume: " % viewName, self.volumeSelectors[viewName])
 
-    self.volumeSelectors["Warped"].addEnabled = True
-    self.volumeSelectors["Warped"].setToolTip( "Pick the warped volume, which is the target for the registration." )
+    self.volumeSelectors["Transformed"].addEnabled = True
+    self.volumeSelectors["Transformed"].selectNodeUponCreation = True
+    self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
 
     #
     # layout options
@@ -144,10 +143,98 @@ class LandmarkRegistrationWidget:
 
     #
     # Landmark Widget
+    # - manages landmarks
     #
     self.landmarks = Landmarks(self.logic)
     self.landmarks.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
     parametersFormLayout.addRow(self.landmarks.widget)
+
+    #
+    # registration type selection
+    # - allows selection of the active registration type to display
+    #
+    self.registrationTypeBox = qt.QGroupBox("Registration Type")
+    self.registrationTypeBox.setLayout(qt.QFormLayout())
+    self.registrationTypeButtons = {}
+    self.registrationTypes = ("Linear", "Hybrid B-Spline")
+    for registrationType in self.registrationTypes:
+      self.registrationTypeButtons[registrationType] = qt.QRadioButton()
+      self.registrationTypeButtons[registrationType].text = registrationType
+      self.registrationTypeButtons[registrationType].setToolTip("Pick the type of registration")
+      self.registrationTypeButtons[registrationType].connect("clicked()",
+                                      lambda t=registrationType: self.onRegistrationType(t))
+      self.registrationTypeBox.layout().addWidget(self.registrationTypeButtons[registrationType])
+    self.layout.addWidget(self.registrationTypeBox)
+
+    #
+    # Linear Registration Pane - initially hidden
+    # - interface options for linear registration
+    # - TODO: move registration code into separate plugins
+    #
+    self.linearCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.linearCollapsibleButton.text = "Linear Registration"
+    linearFormLayout = qt.QFormLayout()
+    self.linearCollapsibleButton.setLayout(linearFormLayout)
+    self.layout.addWidget(self.linearCollapsibleButton)
+
+    self.linearRegistrationActive = qt.QCheckBox()
+    self.linearRegistrationActive.checked = False
+    self.linearRegistrationActive.connect("toggled(bool)", self.onLinearActive)
+    linearFormLayout.addRow("Registration Active: ", self.linearRegistrationActive)
+
+    buttonLayout = qt.QVBoxLayout()
+    self.linearModeButtons = {}
+    modes = ("Rigid", "Similarity", "Affine")
+    for mode in modes:
+      self.linearModeButtons[mode] = qt.QRadioButton()
+      self.linearModeButtons[mode].text = mode
+      self.linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
+      buttonLayout.addWidget(self.linearModeButtons[mode])
+      self.linearModeButtons[mode].connect('clicked(bool)', self.onLinearTransform)
+    self.linearModeButtons["Affine"].checked = True
+    linearFormLayout.addRow("Registration Mode: ", buttonLayout)
+
+    self.linearTransformSelector = slicer.qMRMLNodeComboBox()
+    self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
+    self.linearTransformSelector.selectNodeUponCreation = True
+    self.linearTransformSelector.addEnabled = True
+    self.linearTransformSelector.removeEnabled = True
+    self.linearTransformSelector.noneEnabled = True
+    self.linearTransformSelector.showHidden = False
+    self.linearTransformSelector.showChildNodeTypes = False
+    self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
+    self.linearTransformSelector.setToolTip( "Pick the transform for linear registration" )
+    linearFormLayout.addRow("Target Linear Transform: ", self.linearTransformSelector)
+
+    #
+    # Hybrid B-Spline Registration Pane - initially hidden
+    #
+    self.hybridCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.hybridCollapsibleButton.text = "Hybrid B-Spline Registration"
+    hybridFormLayout = qt.QFormLayout()
+    self.hybridCollapsibleButton.setLayout(hybridFormLayout)
+    self.layout.addWidget(self.hybridCollapsibleButton)
+
+    self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
+    self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
+    self.hybridTransformSelector.selectNodeUponCreation = True
+    self.hybridTransformSelector.addEnabled = True
+    self.hybridTransformSelector.removeEnabled = True
+    self.hybridTransformSelector.noneEnabled = True
+    self.hybridTransformSelector.showHidden = False
+    self.hybridTransformSelector.showChildNodeTypes = False
+    self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
+    self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
+    hybridFormLayout.addRow("Target B-Spline Transform: ", self.hybridTransformSelector)
+
+    self.registrationTypeInterfaces = {}
+    self.registrationTypeInterfaces['Linear'] = self.linearCollapsibleButton
+    self.registrationTypeInterfaces['Hybrid B-Spline'] = self.hybridCollapsibleButton
+
+    for registrationType in self.registrationTypes:
+      self.registrationTypeInterfaces[registrationType].enabled = False
+      self.registrationTypeInterfaces[registrationType].hide()
+
 
     #
     # Apply Button
@@ -160,7 +247,7 @@ class LandmarkRegistrationWidget:
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
     for selector in self.volumeSelectors.values():
-      selector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+      selector.connect("currentNodeChanged(vtkMRMLNode*)", self.onVolumeNodeSelect)
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -174,10 +261,14 @@ class LandmarkRegistrationWidget:
         volumeNodes.append(volumeNode)
     return(volumeNodes)
 
-  def onSelect(self):
+  def onVolumeNodeSelect(self):
     """When one of the volume selectors is changed"""
     volumeNodes = self.currentVolumeNodes()
     self.landmarks.setVolumeNodes(volumeNodes)
+    fixed = self.volumeSelectors['Fixed'].currentNode()
+    moving = self.volumeSelectors['Moving'].currentNode()
+    for registrationType in self.registrationTypes:
+      self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
 
   def onLayout(self, layoutMode=None):
     volumeNodes = []
@@ -196,6 +287,42 @@ class LandmarkRegistrationWidget:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=viewNames,orientation=layoutMode)
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarks.selectedLandmark)
+
+  def onRegistrationType(self,pickedRegistrationType):
+    """Pick which registration type to display"""
+    for registrationType in self.registrationTypes:
+      self.registrationTypeInterfaces[registrationType].hide()
+    self.registrationTypeInterfaces[pickedRegistrationType].show()
+
+  def onLinearActive(self,active):
+    """Turn on linear mode if possible"""
+    if not self.linearRegistrationActive.checked:
+      self.logic.disableLinearRegistration()
+    else:
+      # ensure we have fixed and moving
+      fixed = self.volumeSelectors['Fixed'].currentNode()
+      moving = self.volumeSelectors['Moving'].currentNode()
+      if not (fixed and moving):
+        self.linearRegistrationActive.checked = False
+      else:
+        # create transform and transformed if needed
+        transform = self.linearTransformSelector.currentNode()
+        if not transform:
+          self.linearTransformSelector.addNode()
+          transform = self.linearTransformSelector.currentNode()
+        transformed = self.volumeSelectors['Transformed'].currentNode()
+        if not transformed:
+          self.volumeSelectors['Transformed'].addNode()
+          transformed = self.volumeSelectors['Transformed'].currentNode()
+        self.logic.enableLinearRegistration(fixed,moving,transform,transformed)
+
+  def onLinearTransform(self):
+    """Call this whenever linear transform needs to be updated"""
+    pass
+
+  def onHybridTransform(self):
+    """Call this whenever linear transform needs to be updated"""
+    pass
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to look up the right slice
@@ -445,7 +572,7 @@ class LandmarkRegistrationLogic:
       fiducialNode.SetAttribute("AssociatedNodeID", associatedNode.GetID())
     fiducialNode.SetName(name)
     fiducialNode.AddControlPoint(position, True, True)
-    fiducialNode.SetSelected(True)
+    fiducialNode.SetSelected(False)
     fiducialNode.SetLocked(False)
     slicer.mrmlScene.AddNode(fiducialNode)
 
@@ -502,7 +629,13 @@ class LandmarkRegistrationLogic:
         fiducialsByName.__delitem__(childName)
     return fiducialsByName
 
+  def enableLinearRegistration(self,fixed,moving,transform,transformed):
+    print("enable")
+    pass
 
+  def disableLinearRegistration(self):
+    print("disable")
+    pass
 
 
   def run(self,inputVolume,outputVolume):
@@ -578,7 +711,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     landmark = logic.addFiducial("tip-of-nose", position=(0, 0, 0),associatedNode=dtiBrain)
     landmark = logic.addFiducial("middle-of-left-eye", position=(23, 0, -.95),associatedNode=dtiBrain)
 
-    w.onSelect()
+    w.onVolumeNodeSelect()
     w.onLayout()
     w.onLandmarkPicked('tip-of-nose')
 
