@@ -315,7 +315,7 @@ class LandmarkRegistrationWidget:
           volumesLogic = slicer.modules.volumes.logic()
           transformedName = "%s-transformed" % moving.GetName()
           transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
-          self.volumeSelectors['Transformed'].currentNode(transformed)
+          self.volumeSelectors['Transformed'].setCurrentNode(transformed)
         landmarks = self.logic.landmarksForVolumes((fixed,moving))
         self.logic.enableLinearRegistration(fixed,moving,landmarks,transform,transformed)
 
@@ -634,25 +634,28 @@ class LandmarkRegistrationLogic:
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     print("enable")
-    self.performLinearRegistration(self,fixed,moving,landmarks,transform,transformed)
+    self.performLinearRegistration(fixed,moving,landmarks,transform,transformed)
     # TODO: set up observers on fixed and moving fiducial
     pass
 
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
-    transformed.SetAndObserveMatrixTransformToParent(transform.GetID())
+    transformed.SetAndObserveTransformNodeID(transform.GetID())
     landmarkTransform = vtk.vtkLandmarkTransform()
     points = {}
     point = [0,]*3
     for volumeNode in (fixed,moving):
       points[volumeNode] = vtk.vtkPoints()
-      points[volumeNode].Allocate(len(landmarks[volumeNode]),0)
-      for fid in landmarks[volumeNode]:
+    for fiducials in landmarks.values():
+      for volumeNode,fid in zip((fixed,moving),fiducials):
         fid.GetFiducialCoordinates(point)
         points[volumeNode].InsertNextPoint(point)
+    for volumeNode in (fixed,moving):
+      print(points[volumeNode])
     landmarkTransform.SetSourceLandmarks(points[moving])
     landmarkTransform.SetTargetLandmarks(points[fixed])
     landmarkTransform.Update()
     transform.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
+    print(landmarkTransform.GetMatrix())
 
   def disableLinearRegistration(self):
     print("disable")
@@ -722,15 +725,17 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.delayDisplay('Two data sets loaded')
 
     w = LandmarkRegistrationWidget()
-    w.volumeSelectors["Fixed"].setCurrentNode(mrHead)
-    w.volumeSelectors["Moving"].setCurrentNode(dtiBrain)
+    w.volumeSelectors["Fixed"].setCurrentNode(dtiBrain)
+    w.volumeSelectors["Moving"].setCurrentNode(mrHead)
 
     logic = LandmarkRegistrationLogic()
-    landmark = logic.addFiducial("tip-of-nose", position=(10, 0, -.5),associatedNode=mrHead)
-    landmark = logic.addFiducial("middle-of-left-eye", position=(30, 0, -.5),associatedNode=mrHead)
+    logic.addFiducial("tip-of-nose", position=(10, 0, -.5),associatedNode=mrHead)
+    logic.addFiducial("middle-of-left-eye", position=(30, 0, -.5),associatedNode=mrHead)
+    logic.addFiducial("pimple", position=(80, -10, 20),associatedNode=mrHead)
 
-    landmark = logic.addFiducial("tip-of-nose", position=(0, 0, 0),associatedNode=dtiBrain)
-    landmark = logic.addFiducial("middle-of-left-eye", position=(23, 0, -.95),associatedNode=dtiBrain)
+    logic.addFiducial("tip-of-nose", position=(0, 60, 0),associatedNode=dtiBrain)
+    logic.addFiducial("middle-of-left-eye", position=(23, 0, -.95),associatedNode=dtiBrain)
+    logic.addFiducial("pimple", position=(22, -9, 37),associatedNode=dtiBrain)
 
     w.onVolumeNodeSelect()
     w.onLayout()
