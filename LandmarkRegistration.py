@@ -127,7 +127,7 @@ class LandmarkRegistrationWidget:
       self.layoutComboBox.addItem('Axial')
       self.layoutComboBox.addItem('Sagittal')
       self.layoutComboBox.addItem('Coronal')
-      #self.layoutComboBox.addItem('Axial/Sagittal/Coronal')
+      self.layoutComboBox.addItem('Axi/Sag/Cor')
       #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
       layout.addWidget(self.layoutComboBox)
       self.layoutButton = qt.QPushButton('Layout')
@@ -184,8 +184,8 @@ class LandmarkRegistrationWidget:
 
     buttonLayout = qt.QVBoxLayout()
     self.linearModeButtons = {}
-    modes = ("Rigid", "Similarity", "Affine")
-    for mode in modes:
+    self.linearModes = ("Rigid", "Similarity", "Affine")
+    for mode in self.linearModes:
       self.linearModeButtons[mode] = qt.QRadioButton()
       self.linearModeButtons[mode].text = mode
       self.linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
@@ -285,6 +285,8 @@ class LandmarkRegistrationWidget:
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
     if layoutMode in oneViewModes:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
+    elif layoutMode == 'Axi/Sag/Cor':
+      self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarks.selectedLandmark)
 
@@ -321,20 +323,29 @@ class LandmarkRegistrationWidget:
 
   def onLinearTransform(self):
     """Call this whenever linear transform needs to be updated"""
-    pass
+    for mode in self.linearModes:
+      if self.linearModeButtons[mode].checked:
+        self.logic.linearMode = mode
+        break
 
   def onHybridTransform(self):
     """Call this whenever linear transform needs to be updated"""
     pass
 
   def updateSliceNodesByVolumeID(self):
-    """Build a mapping to look up the right slice
-    node that is currently displaying a given volumeID"""
+    """Build a mapping to a list of slice nodes
+    node that are currently displaying a given volumeID"""
+    compositeNodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
     self.sliceNodesByVolumeID = {}
     if self.sliceNodesByViewName:
-      for viewName,sliceNode in self.sliceNodesByViewName.iteritems():
-        volumeID = self.volumeSelectors[viewName].currentNodeId
-        self.sliceNodesByVolumeID[volumeID] = sliceNode
+      for sliceNode in self.sliceNodesByViewName.values():
+        for compositeNode in compositeNodes.values():
+          if compositeNode.GetLayoutName() == sliceNode.GetLayoutName():
+            volumeID = compositeNode.GetBackgroundVolumeID()
+            if self.sliceNodesByVolumeID.has_key(volumeID):
+              self.sliceNodesByVolumeID[volumeID].append(sliceNode)
+            else:
+              self.sliceNodesByVolumeID[volumeID] = [sliceNode,]
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
@@ -349,7 +360,8 @@ class LandmarkRegistrationWidget:
           volumeNodeID = fid.GetAttribute("AssociatedNodeID")
           if volumeNodeID:
             if self.sliceNodesByVolumeID.has_key(volumeNodeID):
-              displayNode.AddViewNodeID(self.sliceNodesByVolumeID[volumeNodeID].GetID())
+              for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
+                displayNode.AddViewNodeID(sliceNode.GetID())
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -365,7 +377,8 @@ class LandmarkRegistrationWidget:
         if self.sliceNodesByVolumeID.has_key(volumeNodeID):
           point = [0,]*3
           fid.GetFiducialCoordinates(point)
-          self.sliceNodesByVolumeID[volumeNodeID].JumpSliceByCentering(*point)
+          for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
+            sliceNode.JumpSliceByCentering(*point)
 
   def onApplyButton(self):
     print("Run the algorithm")
@@ -548,7 +561,7 @@ class LandmarkRegistrationLogic:
   requiring an instance of the Widget
   """
   def __init__(self):
-    pass
+    self.linearMode = 'Affine'
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
@@ -641,6 +654,13 @@ class LandmarkRegistrationLogic:
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     transformed.SetAndObserveTransformNodeID(transform.GetID())
     landmarkTransform = vtk.vtkLandmarkTransform()
+    if self.linearMode == 'Rigid':
+      landmarkTransform.SetModeToRigidBody()
+    if self.linearMode == 'Similarity':
+      landmarkTransform.SetModeToSimilarity()
+    if self.linearMode == 'Affine':
+      landmarkTransform.SetModeToAffine()
+
     points = {}
     point = [0,]*3
     for volumeNode in (fixed,moving):
@@ -649,13 +669,11 @@ class LandmarkRegistrationLogic:
       for volumeNode,fid in zip((fixed,moving),fiducials):
         fid.GetFiducialCoordinates(point)
         points[volumeNode].InsertNextPoint(point)
-    for volumeNode in (fixed,moving):
-      print(points[volumeNode])
+        print("%s: %s" % (volumeNode.GetName(), str(point)))
     landmarkTransform.SetSourceLandmarks(points[moving])
     landmarkTransform.SetTargetLandmarks(points[fixed])
     landmarkTransform.Update()
     transform.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
-    print(landmarkTransform.GetMatrix())
 
   def disableLinearRegistration(self):
     print("disable")
@@ -729,13 +747,20 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.volumeSelectors["Moving"].setCurrentNode(mrHead)
 
     logic = LandmarkRegistrationLogic()
-    logic.addFiducial("tip-of-nose", position=(10, 0, -.5),associatedNode=mrHead)
-    logic.addFiducial("middle-of-left-eye", position=(30, 0, -.5),associatedNode=mrHead)
-    logic.addFiducial("pimple", position=(80, -10, 20),associatedNode=mrHead)
+    
+    for name,point in (
+      ('tip-of-nose', [35.115070343017578, 74.803565979003906, -21.032917022705078]),
+      ('middle-of-left-eye', [0.50825262069702148, 128.85432434082031, -48.434154510498047]),
+      ('left-ear', [80.0, -26.329217910766602, -15.292181015014648]),
+      ):
+      logic.addFiducial(name, position=point,associatedNode=mrHead)
 
-    logic.addFiducial("tip-of-nose", position=(0, 60, 0),associatedNode=dtiBrain)
-    logic.addFiducial("middle-of-left-eye", position=(23, 0, -.95),associatedNode=dtiBrain)
-    logic.addFiducial("pimple", position=(22, -9, 37),associatedNode=dtiBrain)
+    for name,point in (
+      ('tip-of-nose', [28.432207107543945, 71.112533569335938, -41.938472747802734]),
+      ('middle-of-left-eye', [0.9863210916519165, 94.6998291015625, -49.877540588378906]),
+      ('left-ear', [79.28509521484375, -12.95069694519043, 5.3944296836853027]),
+      ):
+      logic.addFiducial(name, position=point,associatedNode=dtiBrain)
 
     w.onVolumeNodeSelect()
     w.onLayout()
