@@ -484,6 +484,9 @@ class Landmarks:
     self.landmarkGroupBox.setLayout(qt.QFormLayout())
     # add the action buttons at the top
     actionButtons = qt.QHBoxLayout()
+    self.postButton = qt.QPushButton("Post")
+    self.postButton.connect('clicked()', self.postLandmarks)
+    actionButtons.addWidget(self.postButton)
     self.addButton = qt.QPushButton("Add")
     self.addButton.connect('clicked()', self.addLandmark)
     actionButtons.addWidget(self.addButton)
@@ -528,6 +531,45 @@ class Landmarks:
       fiducial = self.logic.addFiducial(landmarkName, position=(0, 0, 0),associatedNode=volumeNode)
     self.updateLandmarkArray()
     self.pickLandmark(landmarkName)
+    
+  def addFiducials(self, position):
+    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
+    index = 0
+    while True:
+      landmarkName = 'L-%d' % index
+      if not landmarkName in landmarks.keys():
+        break
+      index += 1
+    for volumeNode in self.volumeNodes:
+      fiducial = self.logic.addFiducial(landmarkName, position,associatedNode=volumeNode)
+    self.updateLandmarkArray()
+    self.pickLandmark(landmarkName)
+
+  def postLandmarks(self):
+    import numpy
+    nodes=vtk.vtkCollection()
+    nodes=slicer.mrmlScene.GetNodesByClass("vtkMRMLAnnotationFiducialNode")
+    n=nodes.GetNumberOfItems()
+    if n==0:
+        return
+    points=numpy.zeros((n,3))
+        
+    # --- Get the points of all mouse-created fiducials ---
+    for i in xrange(n): 
+      f = nodes.GetItemAsObject(i)
+      coords = [0,0,0]
+      f.GetFiducialCoordinates(coords)
+      points[i] = coords
+      
+	# --- Delete all current fiducials ---
+    f = nodes.GetItemAsObject(0) 
+    hierarchyNode = slicer.vtkMRMLHierarchyNode().GetAssociatedHierarchyNode(slicer.mrmlScene, f.GetID())
+    listNode = hierarchyNode.GetParentNode()
+    listNode.RemoveAllChildrenNodes()
+
+	# --- Recreate fiducials separately for each view ---
+    for i in xrange(n): 
+      self.addFiducials(points[i])
 
   def removeLandmark(self):
     self.logic.removeLandmarkForVolumes(self.selectedLandmark, self.volumeNodes)
