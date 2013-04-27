@@ -484,6 +484,9 @@ class Landmarks:
     self.landmarkGroupBox.setLayout(qt.QFormLayout())
     # add the action buttons at the top
     actionButtons = qt.QHBoxLayout()
+    self.syncButton = qt.QPushButton("Sync")
+    self.syncButton.connect('clicked()', self.syncLandmarks)
+    actionButtons.addWidget(self.syncButton)
     self.addButton = qt.QPushButton("Add")
     self.addButton.connect('clicked()', self.addLandmark)
     actionButtons.addWidget(self.addButton)
@@ -508,6 +511,8 @@ class Landmarks:
     self.landmarkArrayHolder.layout().addWidget(self.landmarkGroupBox)
 
   def pickLandmark(self,landmarkName):
+    """Hightlight the named landmark button and emit
+    a 'signal'"""
     for key in self.buttons.keys():
       self.buttons[key].text = key
     self.buttons[landmarkName].text = '*' + landmarkName
@@ -515,6 +520,10 @@ class Landmarks:
     self.renameButton.enabled = True
     self.removeButton.enabled = True
     self.emit("LandmarkPicked(landmarkName)", landmarkName)
+
+  def syncLandmarks(self):
+    self.logic.syncLandmarks(self.volumeNodes)
+    self.updateLandmarkArray()
 
   def addLandmark(self):
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
@@ -546,7 +555,6 @@ class Landmarks:
         self.selectedLandmark = newName
         self.updateLandmarkArray()
         self.pickLandmark(newName)
-
 
 
 #
@@ -613,6 +621,22 @@ class LandmarkRegistrationLogic:
         slicer.mrmlScene.RemoveNode(fid)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
+  def volumeFiducialsByName(self,volumeNode):
+    """return a dictionary of annotation nodes that are
+    children of the list associated with the given
+    volume node, where the keys are fiducial names
+    and the values are fiducial nodes"""
+    fiducialsByName = {}
+    listName = volumeNode.GetName() + "-landmarks"
+    fidListHierarchyNode = slicer.util.getNode(listName)
+    if fidListHierarchyNode:
+      childCollection = vtk.vtkCollection()
+      fidListHierarchyNode.GetAllChildren(childCollection)
+      for childIndex in range(childCollection.GetNumberOfItems()):
+        fiducialNode = childCollection.GetItemAsObject(childIndex)
+        fiducialsByName[fiducialNode.GetName()] = fiducialNode
+    return fiducialsByName
+
   def volumeFiducialsAsList(self,volumeNode):
     """return a list of annotation nodes that are
     children of the list associated with the given
@@ -644,6 +668,31 @@ class LandmarkRegistrationLogic:
       if len(fiducialsByName[childName]) != len(volumeNodes):
         fiducialsByName.__delitem__(childName)
     return fiducialsByName
+
+  def syncLandmarks(self,volumeNodes):
+    """Ensure that all volume nodes have a complete set
+    of matching landmarks - that is, make a set of landmarks
+    that is the union of all unique fiducial names for all volumes
+    and then make sure that each volume node has one
+    of each of those fiducials.  Map these through the
+    transform if needed.
+    """
+    # build the union of all names as a map
+    # of fiducial names to a fiducial with that name
+    allNamedFiducials = {}
+    for volumeNode in volumeNodes:
+      children = self.volumeFiducialsAsList(volumeNode)
+      for child in children:
+        if not allNamedFiducials.has_key(child.GetName()):
+          allNamedFiducials[child.GetName()] = child
+    # now add the missing ones
+    for volumeNode in volumeNodes:
+      fiducialsByName = self.volumeFiducialsByName(volumeNode)
+      for fiducialName in allNamedFiducials:
+        if not fiducialsByName.has_key(fiducialName):
+          point = [0,]*3
+          fiducialsByName[fiducialName].GetFiducialCoordinates(point)
+          self.addFiducial(fiducialName, position=point,associatedNode=volumeNode)
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     print("enable")
