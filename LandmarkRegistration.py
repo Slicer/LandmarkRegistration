@@ -796,18 +796,18 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.volumeSelectors["Moving"].setCurrentNode(mrHead)
 
     logic = LandmarkRegistrationLogic()
-    
+
     for name,point in (
-      ('tip-of-nose', [35.115070343017578, 74.803565979003906, -21.032917022705078]),
-      ('middle-of-left-eye', [0.50825262069702148, 128.85432434082031, -48.434154510498047]),
-      ('left-ear', [80.0, -26.329217910766602, -15.292181015014648]),
+      ('middle-of-right-eye', [35.115070343017578, 74.803565979003906, -21.032917022705078]),
+      ('tip-of-nose', [0.50825262069702148, 128.85432434082031, -48.434154510498047]),
+      ('right-ear', [80.0, -26.329217910766602, -15.292181015014648]),
       ):
       logic.addFiducial(name, position=point,associatedNode=mrHead)
 
     for name,point in (
-      ('tip-of-nose', [28.432207107543945, 71.112533569335938, -41.938472747802734]),
-      ('middle-of-left-eye', [0.9863210916519165, 94.6998291015625, -49.877540588378906]),
-      ('left-ear', [79.28509521484375, -12.95069694519043, 5.3944296836853027]),
+      ('middle-of-right-eye', [28.432207107543945, 71.112533569335938, -41.938472747802734]),
+      ('tip-of-nose', [0.9863210916519165, 94.6998291015625, -49.877540588378906]),
+      ('right-ear', [79.28509521484375, -12.95069694519043, 5.3944296836853027]),
       ):
       logic.addFiducial(name, position=point,associatedNode=dtiBrain)
 
