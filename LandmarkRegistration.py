@@ -522,10 +522,16 @@ class Landmarks:
     self.emit("LandmarkPicked(landmarkName)", landmarkName)
 
   def syncLandmarks(self):
+    """Make sure all volumes have a corresponding fiducials.
+    """
     self.logic.syncLandmarks(self.volumeNodes)
     self.updateLandmarkArray()
 
   def addLandmark(self):
+    """Add a new landmark by adding correspondingly named
+    fiducials to all the current volume nodes.
+    Find a unique name for the landmark and place it at the origin.
+    """
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
     index = 0
     while True:
@@ -691,7 +697,7 @@ class LandmarkRegistrationLogic:
       for fiducialName in allNamedFiducials:
         if not fiducialsByName.has_key(fiducialName):
           point = [0,]*3
-          fiducialsByName[fiducialName].GetFiducialCoordinates(point)
+          allNamedFiducials[fiducialName].GetFiducialCoordinates(point)
           self.addFiducial(fiducialName, position=point,associatedNode=volumeNode)
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
