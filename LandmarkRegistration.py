@@ -857,7 +857,10 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.volumeSelectors["Fixed"].setCurrentNode(pre)
     w.volumeSelectors["Moving"].setCurrentNode(post)
 
-    logic = LandmarkRegistrationLogic()
+    # initiate linear registration
+    w.onRegistrationType("Linear")
+    w.linearRegistrationActive.checked = True
 
+    w.onLayout(layoutMode="Axi/Sag/Cor")
 
     self.delayDisplay('test_LandmarkRegistration2 passed!')
