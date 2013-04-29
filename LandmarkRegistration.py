@@ -804,7 +804,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     dtiBrain = sampleDataLogic.downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
 
-    w = LandmarkRegistrationWidget()
+    w = landmarkregistrationwidget
     w.volumeSelectors["Fixed"].setCurrentNode(dtiBrain)
     w.volumeSelectors["Moving"].setCurrentNode(mrHead)
 
@@ -845,7 +845,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     pre,post = sampleDataLogic.downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
-    w = LandmarkRegistrationWidget()
+    w = landmarkregistrationwidget
     w.volumeSelectors["Fixed"].setCurrentNode(pre)
     w.volumeSelectors["Moving"].setCurrentNode(post)
 
