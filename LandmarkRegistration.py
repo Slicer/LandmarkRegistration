@@ -158,6 +158,14 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow(self.landmarks.widget)
 
     #
+    # Registration Options
+    #
+    registrationCollapsibleButton = ctk.ctkCollapsibleButton()
+    registrationCollapsibleButton.text = "Registration"
+    self.layout.addWidget(registrationCollapsibleButton)
+    registrationFormLayout = qt.QFormLayout(registrationCollapsibleButton)
+
+    #
     # registration type selection
     # - allows selection of the active registration type to display
     #
@@ -172,7 +180,7 @@ class LandmarkRegistrationWidget:
       self.registrationTypeButtons[registrationType].connect("clicked()",
                                       lambda t=registrationType: self.onRegistrationType(t))
       self.registrationTypeBox.layout().addWidget(self.registrationTypeButtons[registrationType])
-    self.layout.addWidget(self.registrationTypeBox)
+    registrationFormLayout.addWidget(self.registrationTypeBox)
 
     #
     # Linear Registration Pane - initially hidden
@@ -183,7 +191,7 @@ class LandmarkRegistrationWidget:
     self.linearCollapsibleButton.text = "Linear Registration"
     linearFormLayout = qt.QFormLayout()
     self.linearCollapsibleButton.setLayout(linearFormLayout)
-    self.layout.addWidget(self.linearCollapsibleButton)
+    registrationFormLayout.addWidget(self.linearCollapsibleButton)
 
     self.linearRegistrationActive = qt.QCheckBox()
     self.linearRegistrationActive.checked = False
@@ -221,7 +229,7 @@ class LandmarkRegistrationWidget:
     self.hybridCollapsibleButton.text = "Hybrid B-Spline Registration"
     hybridFormLayout = qt.QFormLayout()
     self.hybridCollapsibleButton.setLayout(hybridFormLayout)
-    self.layout.addWidget(self.hybridCollapsibleButton)
+    registrationFormLayout.addWidget(self.hybridCollapsibleButton)
 
     self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
     self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
