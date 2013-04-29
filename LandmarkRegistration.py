@@ -107,7 +107,7 @@ class LandmarkRegistrationWidget:
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
     self.volumeSelectors = {}
-    self.viewNames = ("Moving", "Fixed", "Transformed")
+    self.viewNames = ("Fixed", "Moving", "Transformed")
     for viewName in self.viewNames:
       self.volumeSelectors[viewName] = slicer.qMRMLNodeComboBox()
       self.volumeSelectors[viewName].nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
