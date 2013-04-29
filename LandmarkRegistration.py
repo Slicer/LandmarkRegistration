@@ -90,6 +90,14 @@ class LandmarkRegistrationWidget:
     reloadFormLayout.addWidget(self.reloadAndTestButton)
     self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
+    # reload and run specific tests
+    scenarios = ("Basic", "Linear",)
+    for scenario in scenarios:
+      button = qt.QPushButton("Reload and Test %s" % scenario)
+      self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
+      reloadFormLayout.addWidget(button)
+      button.connect('clicked()', lambda : self.onReloadAndTest(scenario=scenario))
+
     #
     # Parameters Area
     #
@@ -423,12 +431,12 @@ class LandmarkRegistrationWidget:
         'globals()["%s"].%s(parent)' % (moduleName, widgetName))
     globals()[widgetName.lower()].setup()
 
-  def onReloadAndTest(self,moduleName="LandmarkRegistration"):
+  def onReloadAndTest(self,moduleName="LandmarkRegistration",scenario=None):
     try:
       self.onReload()
       evalString = 'globals()["%s"].%sTest()' % (moduleName, moduleName)
       tester = eval(evalString)
-      tester.runTest()
+      tester.runTest(scenario=scenario)
     except Exception, e:
       import traceback
       traceback.print_exc()
@@ -769,25 +777,24 @@ class LandmarkRegistrationTest(unittest.TestCase):
     """
     slicer.mrmlScene.Clear(0)
 
-  def runTest(self):
+  def runTest(self,scenario=None):
     """Run as few or as many tests as needed here.
     """
     self.setUp()
-    self.test_LandmarkRegistration1()
+    if scenario == "Basic":
+      self.test_LandmarkRegistration1()
+    elif scenario == "Linear":
+      self.test_LandmarkRegistration2()
+    else:
+      self.test_LandmarkRegistration1()
+      self.test_LandmarkRegistration2()
 
   def test_LandmarkRegistration1(self):
-    """ Ideally you should have several levels of tests.  At the lowest level
-    tests sould exercise the functionality of the logic with different inputs
-    (both valid and invalid).  At higher levels your tests should emulate the
-    way the user would interact with your code and confirm that it still works
-    the way you intended.
-    One of the most important features of the tests is that it should alert other
-    developers when their changes will have an impact on the behavior of your
-    module.  For example, if a developer removes a feature that you depend on,
-    your test should break so they know that the feature is needed.
+    """
+    This tests basic landmarking with two volumes
     """
 
-    self.delayDisplay("Starting the test")
+    self.delayDisplay("Starting test_LandmarkRegistration1")
     #
     # first, get some data
     #
@@ -821,4 +828,28 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.onLayout()
     w.onLandmarkPicked('tip-of-nose')
 
-    self.delayDisplay('Test passed!')
+    self.delayDisplay('test_LandmarkRegistration1 passed!')
+
+  def test_LandmarkRegistration2(self):
+    """
+    This tests basic linear registration with two
+    volumes (pre- post-surgery)
+    """
+
+    self.delayDisplay("Starting test_LandmarkRegistration2")
+    #
+    # first, get some data
+    #
+    import SampleData
+    sampleDataLogic = SampleData.SampleDataLogic()
+    pre,post = sampleDataLogic.downloadDentalSurgery()
+    self.delayDisplay('Two data sets loaded')
+
+    w = LandmarkRegistrationWidget()
+    w.volumeSelectors["Fixed"].setCurrentNode(pre)
+    w.volumeSelectors["Moving"].setCurrentNode(post)
+
+    logic = LandmarkRegistrationLogic()
+
+
+    self.delayDisplay('test_LandmarkRegistration2 passed!')
