@@ -303,8 +303,22 @@ class LandmarkRegistrationWidget:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
     elif layoutMode == 'Axi/Sag/Cor':
       self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
+    self.overlayFixedOnTransformed()
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarks.selectedLandmark)
+
+  def overlayFixedOnTransformed(self):
+    """If there are viewers showing the tranfsformed volume
+    in the background, make the foreground volume be the fixed volume
+    and set opacity to 0.5"""
+    fixedNode = self.volumeSelectors['Fixed'].currentNode()
+    transformedNode = self.volumeSelectors['Transformed'].currentNode()
+    if transformedNode:
+      compositeNodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
+      for compositeNode in compositeNodes.values():
+        if compositeNode.GetBackgroundVolumeID() == transformedNode.GetID():
+          compositeNode.SetForegroundVolumeID(fixedNode.GetID())
+          compositeNode.SetForegroundOpacity(0.5)
 
   def onRegistrationType(self,pickedRegistrationType):
     """Pick which registration type to display"""
@@ -853,7 +867,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     pre,post = sampleDataLogic.downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
-    w = landmarkregistrationwidget
+    w = globals()['landmarkregistrationwidget']
     w.volumeSelectors["Fixed"].setCurrentNode(pre)
     w.volumeSelectors["Moving"].setCurrentNode(post)
 
