@@ -50,6 +50,7 @@ class LandmarkRegistrationWidget:
     self.logic = LandmarkRegistrationLogic()
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
+    self.observerTags = []
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -63,7 +64,7 @@ class LandmarkRegistrationWidget:
       self.parent.show()
 
   def setup(self):
-    # Instantiate and connect widgets ...
+    """Instantiate and connect widgets ..."""
 
     #
     # Reload and Test area
@@ -251,7 +252,6 @@ class LandmarkRegistrationWidget:
       self.registrationTypeInterfaces[registrationType].enabled = False
       self.registrationTypeInterfaces[registrationType].hide()
 
-
     #
     # Apply Button
     #
@@ -265,8 +265,30 @@ class LandmarkRegistrationWidget:
     for selector in self.volumeSelectors.values():
       selector.connect("currentNodeChanged(vtkMRMLNode*)", self.onVolumeNodeSelect)
 
+    self.addObservers()
+
     # Add vertical spacer
     self.layout.addStretch(1)
+
+  def addObservers(self):
+    """Observe the mrml scene for changes that we wish to respond to.
+    scene observer:
+     - whenever a new node is added, check if it was a new fiducual.
+       if so, transform it into a landmark by putting it in the correct
+       hierarchy and creating a matching fiducial for other voluemes
+    fiducial obserers:
+     - when fiducials are manipulated, perform (or schedule) an update
+       to the currently active registration method.
+    """
+    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarks.requestUpdate)
+    self.observerTags.append( (slicer.mrmlScene, tag) )
+
+  def removeObservers(self):
+    """Remove observers and any other cleanup needed to
+    disconnect from the scene"""
+    for obj,tag in self.observerTags:
+      obj.RemoveObserver(tag)
+    self.observerTags = []
 
   def currentVolumeNodes(self):
     """List of currently selected volume nodes"""
@@ -479,6 +501,7 @@ class Landmarks:
     self.landmarkGroupBox = None # a QGroupBox
     self.buttons = {} # the current buttons in the group box
     self.connections = {} # list of slots per signal
+    self.pendingUpdate = None # update on new scene nodes
 
     self.widget = qt.QWidget()
     self.layout = qt.QFormLayout(self.widget)
@@ -592,6 +615,19 @@ class Landmarks:
         self.updateLandmarkArray()
         self.pickLandmark(newName)
 
+  def requestUpdate(self,caller,event):
+    """Start a SingleShot timer that will check the fiducials
+    in the scene and turn them into landmarks if needed"""
+    print('update requested')
+    if not self.pendingUpdate:
+      print('update scheduled')
+      self.pendingUpdate = qt.QTimer.singleShot(0, self.update)
+
+  def update(self):
+    """Perform the update of any new fiducials"""
+    print('updating landmarks')
+    self.syncLandmarks()
+    self.pendingUpdate = None
 
 #
 # LandmarkRegistrationLogic
