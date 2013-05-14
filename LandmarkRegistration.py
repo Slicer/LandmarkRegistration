@@ -270,6 +270,10 @@ class LandmarkRegistrationWidget:
     # Add vertical spacer
     self.layout.addStretch(1)
 
+  def cleanup(self):
+    self.removeObservers()
+    print('widget is cleaned up')
+
   def addObservers(self):
     """Observe the mrml scene for changes that we wish to respond to.
     scene observer:
@@ -470,10 +474,16 @@ class LandmarkRegistrationWidget:
     while item:
       parent.layout().removeItem(item)
       item = parent.layout().itemAt(0)
+
+    # delete the old widget instance
+    if hasattr(globals()['slicer'].modules, widgetName):
+      getattr(globals()['slicer'].modules, widgetName).cleanup()
+
     # create new widget inside existing parent
     globals()[widgetName.lower()] = eval(
         'globals()["%s"].%s(parent)' % (moduleName, widgetName))
     globals()[widgetName.lower()].setup()
+    setattr(globals()['slicer'].modules, widgetName, globals()[widgetName.lower()])
 
   def onReloadAndTest(self,moduleName="LandmarkRegistration",scenario=None):
     try:
@@ -501,7 +511,7 @@ class Landmarks:
     self.landmarkGroupBox = None # a QGroupBox
     self.buttons = {} # the current buttons in the group box
     self.connections = {} # list of slots per signal
-    self.pendingUpdate = None # update on new scene nodes
+    self.pendingUpdate = False # update on new scene nodes
 
     self.widget = qt.QWidget()
     self.layout = qt.QFormLayout(self.widget)
@@ -618,16 +628,15 @@ class Landmarks:
   def requestUpdate(self,caller,event):
     """Start a SingleShot timer that will check the fiducials
     in the scene and turn them into landmarks if needed"""
-    print('update requested')
     if not self.pendingUpdate:
-      print('update scheduled')
-      self.pendingUpdate = qt.QTimer.singleShot(0, self.update)
+      qt.QTimer.singleShot(0, self.update)
+      self.pendingUpdate = True
 
   def update(self):
     """Perform the update of any new fiducials"""
     print('updating landmarks')
     self.syncLandmarks()
-    self.pendingUpdate = None
+    self.pendingUpdate = False
 
 #
 # LandmarkRegistrationLogic
@@ -862,7 +871,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     dtiBrain = sampleDataLogic.downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
 
-    w = landmarkregistrationwidget
+    w = slicer.modules.LandmarkRegistrationWidget
     w.volumeSelectors["Fixed"].setCurrentNode(dtiBrain)
     w.volumeSelectors["Moving"].setCurrentNode(mrHead)
 
