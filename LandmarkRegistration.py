@@ -912,7 +912,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     pre,post = sampleDataLogic.downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
-    w = globals()['landmarkregistrationwidget']
+    w = slicer.modules.LandmarkRegistrationWidget
     w.volumeSelectors["Fixed"].setCurrentNode(pre)
     w.volumeSelectors["Moving"].setCurrentNode(post)
 
