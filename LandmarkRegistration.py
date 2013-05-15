@@ -265,6 +265,7 @@ class LandmarkRegistrationWidget:
     for selector in self.volumeSelectors.values():
       selector.connect("currentNodeChanged(vtkMRMLNode*)", self.onVolumeNodeSelect)
 
+    # listen to the scene
     self.addObservers()
 
     # Add vertical spacer
@@ -272,7 +273,6 @@ class LandmarkRegistrationWidget:
 
   def cleanup(self):
     self.removeObservers()
-    print('widget is cleaned up')
 
   def addObservers(self):
     """Observe the mrml scene for changes that we wish to respond to.
@@ -284,7 +284,7 @@ class LandmarkRegistrationWidget:
      - when fiducials are manipulated, perform (or schedule) an update
        to the currently active registration method.
     """
-    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarks.requestUpdate)
+    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarks.requestNodeAddedUpdate)
     self.observerTags.append( (slicer.mrmlScene, tag) )
 
   def removeObservers(self):
@@ -595,15 +595,7 @@ class Landmarks:
     fiducials to all the current volume nodes.
     Find a unique name for the landmark and place it at the origin.
     """
-    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
-    index = 0
-    while True:
-      landmarkName = 'L-%d' % index
-      if not landmarkName in landmarks.keys():
-        break
-      index += 1
-    for volumeNode in self.volumeNodes:
-      fiducial = self.logic.addFiducial(landmarkName, position=(0, 0, 0),associatedNode=volumeNode)
+    landmarkName = self.logic.addLandmark(self.volumeNodes)
     self.updateLandmarkArray()
     self.pickLandmark(landmarkName)
 
@@ -625,17 +617,19 @@ class Landmarks:
         self.updateLandmarkArray()
         self.pickLandmark(newName)
 
-  def requestUpdate(self,caller,event):
+  def requestNodeAddedUpdate(self,caller,event):
     """Start a SingleShot timer that will check the fiducials
     in the scene and turn them into landmarks if needed"""
     if not self.pendingUpdate:
-      qt.QTimer.singleShot(0, self.update)
+      qt.QTimer.singleShot(0, self.nodeAddedUpdate)
       self.pendingUpdate = True
 
-  def update(self):
+  def nodeAddedUpdate(self):
     """Perform the update of any new fiducials"""
-    print('updating landmarks')
-    self.syncLandmarks()
+    newLandmarkNames = self.logic.landmarksFromFiducials(self.volumeNodes)
+    if len(newLandmarkNames) > 0:
+      self.syncLandmarks()
+      self.pickLandmark(newLandmarkNames[-1])
     self.pendingUpdate = False
 
 #
@@ -691,6 +685,23 @@ class LandmarkRegistrationLogic:
     fiducialNode.SetDisplayVisibility(True)
 
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
+
+
+  def addLandmark(self,volumeNodes=[], position=(0,0,0)):
+    """Add a new landmark by adding correspondingly named
+    fiducials to all the current volume nodes.
+    Find a unique name for the landmark and place it at the origin.
+    """
+    landmarks = self.landmarksForVolumes(volumeNodes)
+    index = 0
+    while True:
+      landmarkName = 'L-%d' % index
+      if not landmarkName in landmarks.keys():
+        break
+      index += 1
+    for volumeNode in volumeNodes:
+      fiducial = self.addFiducial(landmarkName, position=position,associatedNode=volumeNode)
+    return landmarkName
 
   def removeLandmarkForVolumes(self,landmark,volumeNodes):
     """Remove the fiducial nodes from all the volumes.
@@ -749,6 +760,35 @@ class LandmarkRegistrationLogic:
       if len(fiducialsByName[childName]) != len(volumeNodes):
         fiducialsByName.__delitem__(childName)
     return fiducialsByName
+
+  def landmarksFromFiducials(self,volumeNodes):
+    """Look through all fiducials in the scene and on finding
+    ones that are associated with one of the volumeNodes,
+    re-make the fiducial as a child of the volume node's
+    named hieararchy.  This can be used when responding to
+    new fiducials added to the scene."""
+    # first, get all the fiducials *before* any new ones are added
+    # since we will be adding fiducials inside the loop
+    fiducialsByVolume = {}
+    for volumeNode in volumeNodes:
+      fiducialsByVolume[volumeNode] = self.volumeFiducialsAsList(volumeNode)
+    fiducialNodes = slicer.util.getNodes('vtkMRMLAnnotationFiducialNode*')
+    # now create new landmarks for any fiducials that are not yet landmarks
+    newLandmarkNames = []
+    for volumeNode in volumeNodes:
+      volumeFiducials = fiducialsByVolume[volumeNode]
+      for fiducialNode in fiducialNodes.values():
+        fiducialVolumeID = fiducialNode.GetAttribute('AssociatedNodeID')
+        if fiducialVolumeID == volumeNode.GetID() and fiducialNode not in volumeFiducials:
+          # we found a fiducial for this volume that is not yet in our hierarchy
+          # so we make a copy in the right spot with the right properies and delete it
+          position = [0,]*3
+          fiducialNode.GetFiducialCoordinates(position)
+          newLandmarkName = self.addLandmark(volumeNodes=volumeNodes,position=position)
+          if newLandmarkName not in newLandmarkNames:
+            newLandmarkNames.append(newLandmarkName)
+          slicer.mrmlScene.RemoveNode(fiducialNode)
+    return newLandmarkNames
 
   def syncLandmarks(self,volumeNodes):
     """Ensure that all volume nodes have a complete set
