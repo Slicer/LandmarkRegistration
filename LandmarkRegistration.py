@@ -277,7 +277,7 @@ class LandmarkRegistrationWidget:
   def addObservers(self):
     """Observe the mrml scene for changes that we wish to respond to.
     scene observer:
-     - whenever a new node is added, check if it was a new fiducual.
+     - whenever a new node is added, check if it was a new fiducial.
        if so, transform it into a landmark by putting it in the correct
        hierarchy and creating a matching fiducial for other voluemes
     fiducial obserers:
@@ -422,7 +422,8 @@ class LandmarkRegistrationWidget:
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
-    self.restrictLandmarksToViews()
+    if not self.landmarks.movingView:
+      self.restrictLandmarksToViews()
     self.updateSliceNodesByVolumeID()
     volumeNodes = self.currentVolumeNodes()
     fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
@@ -434,7 +435,8 @@ class LandmarkRegistrationWidget:
           point = [0,]*3
           fid.GetFiducialCoordinates(point)
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
-            sliceNode.JumpSliceByCentering(*point)
+            if sliceNode.GetLayoutName() != self.landmarks.movingView:
+              sliceNode.JumpSliceByCentering(*point)
 
   def onApplyButton(self):
     print("Run the algorithm")
@@ -512,6 +514,8 @@ class Landmarks:
     self.buttons = {} # the current buttons in the group box
     self.connections = {} # list of slots per signal
     self.pendingUpdate = False # update on new scene nodes
+    self.observerTags = [] # for monitoring fiducial changes
+    self.movingView = None # layoutName of slice node where fiducial is being moved
 
     self.widget = qt.QWidget()
     self.layout = qt.QFormLayout(self.widget)
@@ -572,6 +576,34 @@ class Landmarks:
       self.landmarkGroupBox.layout().addRow( button )
       self.buttons[landmarkName] = button
     self.landmarkArrayHolder.layout().addWidget(self.landmarkGroupBox)
+
+    # observe manipulation of the landmarks
+    self.addLandmarkObservers(self.volumeNodes)
+
+  def addLandmarkObservers(self,volumeNodes):
+    """Add observers to all fiducials associated as
+    landmarks for the given volumes"""
+    self.removeLandmarkObservers()
+    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
+    for landmarkName in landmarks:
+      fiducialList = landmarks[landmarkName]
+      for fiducial in fiducialList:
+        tag = fiducial.AddObserver(
+                fiducial.ControlPointModifiedEvent, lambda c,e: self.onFiducialMoved(c))
+        self.observerTags.append( (fiducial,tag) )
+
+  def onFiducialMoved(self,fiducial):
+    """Callback when fiducial's point has been changed.
+    Check the Annotation.State attribute to see if it is being
+    actively moved and if so, skip the picked method."""
+    self.movingView = fiducial.GetAttribute('Annotations.MovingInSliceView')
+    self.pickLandmark(fiducial.GetName())
+
+  def removeLandmarkObservers(self):
+    """Remove any existing observers"""
+    for obj,tag in self.observerTags:
+      obj.RemoveObserver(tag)
+    self.observerTags = []
 
   def pickLandmark(self,landmarkName):
     """Hightlight the named landmark button and emit
