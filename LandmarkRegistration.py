@@ -423,6 +423,7 @@ class LandmarkRegistrationWidget:
     """Jump all slice views such that the selected landmark
     is visible"""
     if not self.landmarks.movingView:
+      # only change the fiducials if they are not being manipulated
       self.restrictLandmarksToViews()
     self.updateSliceNodesByVolumeID()
     volumeNodes = self.currentVolumeNodes()
@@ -514,6 +515,7 @@ class Landmarks:
     self.buttons = {} # the current buttons in the group box
     self.connections = {} # list of slots per signal
     self.pendingUpdate = False # update on new scene nodes
+    self.updatingFiducials = False # don't update while update in process
     self.observerTags = [] # for monitoring fiducial changes
     self.movingView = None # layoutName of slice node where fiducial is being moved
 
@@ -658,11 +660,15 @@ class Landmarks:
 
   def nodeAddedUpdate(self):
     """Perform the update of any new fiducials"""
+    if self.updatingFiducials:
+      return
+    self.updatingFiducials = True
     newLandmarkNames = self.logic.landmarksFromFiducials(self.volumeNodes)
     if len(newLandmarkNames) > 0:
       self.syncLandmarks()
       self.pickLandmark(newLandmarkNames[-1])
     self.pendingUpdate = False
+    self.updatingFiducials = False
 
 #
 # LandmarkRegistrationLogic
@@ -683,6 +689,7 @@ class LandmarkRegistrationLogic:
     volume node"""
 
     annoLogic = slicer.modules.annotations.logic()
+    originalActiveHierarchy = annoLogic.GetActiveHierarchyNodeID()
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
 
     # make the fiducial list if required
@@ -716,6 +723,7 @@ class LandmarkRegistrationLogic:
     fiducialNode.GetAnnotationPointDisplayNode().SetGlyphTypeFromString('StarBurst2D')
     fiducialNode.SetDisplayVisibility(True)
 
+    annoLogic.SetActiveHierarchyNodeID(originalActiveHierarchy)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
 
