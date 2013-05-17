@@ -156,6 +156,7 @@ class LandmarkRegistrationWidget:
     #
     self.landmarks = Landmarks(self.logic)
     self.landmarks.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
+    self.landmarks.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
     parametersFormLayout.addRow(self.landmarks.widget)
 
     #
@@ -354,7 +355,8 @@ class LandmarkRegistrationWidget:
 
   def onLinearActive(self,active):
     """Turn on linear mode if possible"""
-    if not self.linearRegistrationActive.checked:
+    if not active:
+      print('skipping registration')
       self.logic.disableLinearRegistration()
     else:
       # ensure we have fixed and moving
@@ -438,6 +440,13 @@ class LandmarkRegistrationWidget:
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
             if sliceNode.GetLayoutName() != self.landmarks.movingView:
               sliceNode.JumpSliceByCentering(*point)
+
+  def onLandmarkMoved(self,landmarkName):
+    """Called when a landmark is moved (probably through
+    manipulation of the widget in the slice view).
+    This updates the active registration"""
+    if self.linearRegistrationActive.checked:
+      self.onLinearActive(True)
 
   def onApplyButton(self):
     print("Run the algorithm")
@@ -599,7 +608,9 @@ class Landmarks:
     Check the Annotation.State attribute to see if it is being
     actively moved and if so, skip the picked method."""
     self.movingView = fiducial.GetAttribute('Annotations.MovingInSliceView')
-    self.pickLandmark(fiducial.GetName())
+    landmarkName = fiducial.GetName()
+    self.pickLandmark(landmarkName)
+    self.emit("LandmarkMoved(landmarkName)", landmarkName)
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""
@@ -862,6 +873,7 @@ class LandmarkRegistrationLogic:
     pass
 
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
+    print('performing registration')
     transformed.SetAndObserveTransformNodeID(transform.GetID())
     landmarkTransform = vtk.vtkLandmarkTransform()
     if self.linearMode == 'Rigid':
