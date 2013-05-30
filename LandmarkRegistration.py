@@ -873,8 +873,12 @@ class LandmarkRegistrationLogic:
     pass
 
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
+    """Perform the linear transform using the vtkLandmarkTransform class"""
+
     print('performing registration')
     transformed.SetAndObserveTransformNodeID(transform.GetID())
+
+    # try to use user selection, but fall back if not enough points are available
     landmarkTransform = vtk.vtkLandmarkTransform()
     if self.linearMode == 'Rigid':
       landmarkTransform.SetModeToRigidBody()
@@ -882,6 +886,8 @@ class LandmarkRegistrationLogic:
       landmarkTransform.SetModeToSimilarity()
     if self.linearMode == 'Affine':
       landmarkTransform.SetModeToAffine()
+    if len(landmarks.values()) < 3:
+      landmarkTransform.SetModeToRigidBody()
 
     points = {}
     point = [0,]*3
