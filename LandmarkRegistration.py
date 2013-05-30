@@ -445,7 +445,7 @@ class LandmarkRegistrationWidget:
     """Called when a landmark is moved (probably through
     manipulation of the widget in the slice view).
     This updates the active registration"""
-    if self.linearRegistrationActive.checked:
+    if self.linearRegistrationActive.checked and not self.landmarks.movingView:
       self.onLinearActive(True)
 
   def onApplyButton(self):
