@@ -151,6 +151,14 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow("Orientation: ", layout)
 
     #
+    # Visualization Widget
+    # - handy options for controlling the view
+    #
+    self.visualizationWidget = VisualizationWidget(self.logic)
+    #self.visualizationWidget.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
+    parametersFormLayout.addRow(self.visualizationWidget.widget)
+
+    #
     # Landmarks Widget
     # - manages landmarks
     #
@@ -509,20 +517,81 @@ class LandmarkRegistrationWidget:
       qt.QMessageBox.warning(slicer.util.mainWindow(),
           "Reload and Test", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
+class pqWidget(object):
+  """
+  A "QWidget"-like widget class that manages provides some
+  helper functionality (signals, slots...)
+  """
+  def __init__(self):
+    self.connections = {} # list of slots per signal
 
-class LandmarksWidget:
+  def connect(self,signal,slot):
+    """pseudo-connect - signal is arbitrary string and slot if callable"""
+    if not self.connections.has_key(signal):
+      self.connections[signal] = []
+    self.connections[signal].append(slot)
+
+  def disconnect(self,signal,slot):
+    """pseudo-disconnect - remove the connection if it exists"""
+    if self.connections.has_key(signal):
+      if slot in self.connections[signal]:
+        self.connections[signal].remove(slot)
+
+  def emit(self,signal,args):
+    """pseudo-emit - calls any slots connected to signal"""
+    if self.connections.has_key(signal):
+      for slot in self.connections[signal]:
+        slot(args)
+
+
+class VisualizationWidget(pqWidget):
+  """
+  A "QWidget"-like class that manages some of the viewer options
+  used during registration
+  """
+
+  def __init__(self,logic):
+    super(VisualizationWidget,self).__init__()
+    self.logic = logic
+
+    # mimic the structure of the LandmarksWidget for visual
+    # consistency (it needs sub widget so it can delete and refresh the internals)
+    self.widget = qt.QWidget()
+    self.layout = qt.QFormLayout(self.widget)
+    self.boxHolder = qt.QWidget()
+    self.boxHolder.setLayout(qt.QVBoxLayout())
+    self.layout.addRow(self.boxHolder)
+    self.groupBox = qt.QGroupBox("Visualization")
+    self.groupBoxLayout = qt.QFormLayout(self.groupBox)
+    self.boxHolder.layout().addWidget(self.groupBox)
+
+    # fade slider
+    self.fadeSlider = ctk.ctkSliderWidget()
+    self.fadeSlider.minimum = 0
+    self.fadeSlider.maximum = 1.0
+    self.fadeSlider.singleStep = 0.05
+    self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
+    self.groupBoxLayout.addRow("Cross Fade", self.fadeSlider)
+
+  def onFadeChanged(self,value):
+    nodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
+    for node in nodes.values():
+      node.SetForegroundOpacity(value)
+
+
+class LandmarksWidget(pqWidget):
   """
   A "QWidget"-like class that manages a set of landmarks
   that are pairs of fiducials
   """
 
   def __init__(self,logic):
+    super(LandmarksWidget,self).__init__()
     self.logic = logic
     self.volumeNodes = []
     self.selectedLandmark = None # a landmark name
     self.landmarkGroupBox = None # a QGroupBox
     self.buttons = {} # the current buttons in the group box
-    self.connections = {} # list of slots per signal
     self.pendingUpdate = False # update on new scene nodes
     self.updatingFiducials = False # don't update while update in process
     self.observerTags = [] # for monitoring fiducial changes
@@ -534,18 +603,6 @@ class LandmarksWidget:
     self.landmarkArrayHolder.setLayout(qt.QVBoxLayout())
     self.layout.addRow(self.landmarkArrayHolder)
     self.updateLandmarkArray()
-
-  def connect(self,signal,slot):
-    """pseudo-connect - signal is arbitrary string and slot if callable"""
-    if not self.connections.has_key(signal):
-      self.connections[signal] = []
-    self.connections[signal].append(slot)
-
-  def emit(self,signal,args):
-    """pseudo-emit - calls any slots connected to signal"""
-    if self.connections.has_key(signal):
-      for slot in self.connections[signal]:
-        slot(args)
 
   def setVolumeNodes(self,volumeNodes):
     """Set up the widget to reflect the currently selected
