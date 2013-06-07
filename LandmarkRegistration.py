@@ -151,13 +151,13 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow("Orientation: ", layout)
 
     #
-    # Landmark Widget
+    # Landmarks Widget
     # - manages landmarks
     #
-    self.landmarks = Landmarks(self.logic)
-    self.landmarks.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
-    self.landmarks.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
-    parametersFormLayout.addRow(self.landmarks.widget)
+    self.landmarksWidget = LandmarksWidget(self.logic)
+    self.landmarksWidget.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
+    self.landmarksWidget.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
+    parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
     # Registration Options
@@ -285,7 +285,7 @@ class LandmarkRegistrationWidget:
      - when fiducials are manipulated, perform (or schedule) an update
        to the currently active registration method.
     """
-    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarks.requestNodeAddedUpdate)
+    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarksWidget.requestNodeAddedUpdate)
     self.observerTags.append( (slicer.mrmlScene, tag) )
 
   def removeObservers(self):
@@ -307,7 +307,7 @@ class LandmarkRegistrationWidget:
   def onVolumeNodeSelect(self):
     """When one of the volume selectors is changed"""
     volumeNodes = self.currentVolumeNodes()
-    self.landmarks.setVolumeNodes(volumeNodes)
+    self.landmarksWidget.setVolumeNodes(volumeNodes)
     fixed = self.volumeSelectors['Fixed'].currentNode()
     moving = self.volumeSelectors['Moving'].currentNode()
     for registrationType in self.registrationTypes:
@@ -332,7 +332,7 @@ class LandmarkRegistrationWidget:
       self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
     self.overlayFixedOnTransformed()
     self.updateSliceNodesByVolumeID()
-    self.onLandmarkPicked(self.landmarks.selectedLandmark)
+    self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
 
   def overlayFixedOnTransformed(self):
     """If there are viewers showing the tranfsformed volume
@@ -424,7 +424,7 @@ class LandmarkRegistrationWidget:
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
-    if not self.landmarks.movingView:
+    if not self.landmarksWidget.movingView:
       # only change the fiducials if they are not being manipulated
       self.restrictLandmarksToViews()
     self.updateSliceNodesByVolumeID()
@@ -438,14 +438,14 @@ class LandmarkRegistrationWidget:
           point = [0,]*3
           fid.GetFiducialCoordinates(point)
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
-            if sliceNode.GetLayoutName() != self.landmarks.movingView:
+            if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
 
   def onLandmarkMoved(self,landmarkName):
     """Called when a landmark is moved (probably through
     manipulation of the widget in the slice view).
     This updates the active registration"""
-    if self.linearRegistrationActive.checked and not self.landmarks.movingView:
+    if self.linearRegistrationActive.checked and not self.landmarksWidget.movingView:
       self.onLinearActive(True)
 
   def onApplyButton(self):
@@ -510,7 +510,7 @@ class LandmarkRegistrationWidget:
           "Reload and Test", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
 
-class Landmarks:
+class LandmarksWidget:
   """
   A "QWidget"-like class that manages a set of landmarks
   that are pairs of fiducials
@@ -729,9 +729,11 @@ class LandmarkRegistrationLogic:
     fiducialNode.CreateAnnotationPointDisplayNode()
     # TODO: pick appropriate defaults
     # 135,135,84
-    fiducialNode.SetTextScale(2.)
-    fiducialNode.GetAnnotationPointDisplayNode().SetGlyphScale(2)
+    fiducialNode.SetTextScale(3.)
+    fiducialNode.GetAnnotationPointDisplayNode().SetGlyphScale(3.)
     fiducialNode.GetAnnotationPointDisplayNode().SetGlyphTypeFromString('StarBurst2D')
+    fiducialNode.GetAnnotationPointDisplayNode().SetColor((1,1,0))
+    fiducialNode.GetAnnotationTextDisplayNode().SetColor((1,1,0))
     fiducialNode.SetDisplayVisibility(True)
 
     annoLogic.SetActiveHierarchyNodeID(originalActiveHierarchy)
