@@ -127,35 +127,11 @@ class LandmarkRegistrationWidget:
     self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
 
     #
-    # layout options
-    #
-    layout = qt.QHBoxLayout()
-    self.layoutComboBox = qt.QComboBox()
-    if True:
-      # combo box version
-      self.layoutComboBox.addItem('Axial')
-      self.layoutComboBox.addItem('Sagittal')
-      self.layoutComboBox.addItem('Coronal')
-      self.layoutComboBox.addItem('Axi/Sag/Cor')
-      #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
-      layout.addWidget(self.layoutComboBox)
-      self.layoutButton = qt.QPushButton('Layout')
-      self.layoutButton.connect('clicked()', self.onLayout)
-      layout.addWidget(self.layoutButton)
-    else:
-      modes = ( ('Ax', 'Axial'), ('Sg', 'Sagittal'), ('Cr', 'Coronal'),)
-      for label,mode in modes:
-        button = qt.QPushButton(label)
-        button.connect('clicked()',lambda m=mode: self.onLayout(mode))
-        layout.addWidget(button)
-    parametersFormLayout.addRow("Orientation: ", layout)
-
-    #
     # Visualization Widget
     # - handy options for controlling the view
     #
     self.visualizationWidget = VisualizationWidget(self.logic)
-    #self.visualizationWidget.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
+    self.visualizationWidget.connect("layoutRequested(mode)", self.onLayout)
     parametersFormLayout.addRow(self.visualizationWidget.widget)
 
     #
@@ -163,8 +139,8 @@ class LandmarkRegistrationWidget:
     # - manages landmarks
     #
     self.landmarksWidget = LandmarksWidget(self.logic)
-    self.landmarksWidget.connect("LandmarkPicked(landmarkName)", self.onLandmarkPicked)
-    self.landmarksWidget.connect("LandmarkMoved(landmarkName)", self.onLandmarkMoved)
+    self.landmarksWidget.connect("landmarkPicked(landmarkName)", self.onLandmarkPicked)
+    self.landmarksWidget.connect("landmarkMoved(landmarkName)", self.onLandmarkMoved)
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
@@ -321,7 +297,7 @@ class LandmarkRegistrationWidget:
     for registrationType in self.registrationTypes:
       self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
 
-  def onLayout(self, layoutMode=None):
+  def onLayout(self, layoutMode="Axi/Sag/Cor"):
     volumeNodes = []
     activeViewNames = []
     for viewName in self.viewNames:
@@ -329,8 +305,6 @@ class LandmarkRegistrationWidget:
       if volumeNode:
         volumeNodes.append(volumeNode)
         activeViewNames.append(viewName)
-    if not layoutMode:
-      layoutMode = self.layoutComboBox.currentText
     import CompareVolumes
     compareLogic = CompareVolumes.CompareVolumesLogic()
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
@@ -565,13 +539,48 @@ class VisualizationWidget(pqWidget):
     self.groupBoxLayout = qt.QFormLayout(self.groupBox)
     self.boxHolder.layout().addWidget(self.groupBox)
 
+    #
+    # layout options
+    #
+    layout = qt.QHBoxLayout()
+    self.layoutComboBox = qt.QComboBox()
+    # combo box 
+    self.layoutComboBox.addItem('Axial')
+    self.layoutComboBox.addItem('Sagittal')
+    self.layoutComboBox.addItem('Coronal')
+    self.layoutComboBox.addItem('Axi/Sag/Cor')
+    #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
+    layout.addWidget(self.layoutComboBox)
+    self.layoutButton = qt.QPushButton('Layout')
+    self.layoutButton.connect('clicked()', self.onLayout)
+    layout.addWidget(self.layoutButton)
+    self.groupBoxLayout.addRow("Orientation: ", layout)
+
+    #
+    # Volume display selection
+    #
+    checkboxHolder = qt.QWidget()
+    layout = qt.QHBoxLayout()
+    checkboxHolder.setLayout(layout)
+    for volume in ("Fixed", "Moving", "Blend",):
+      b = qt.QCheckBox()
+      b.text = volume
+      layout.addWidget(b)
+    self.groupBoxLayout.addRow("Display", checkboxHolder)
+
+
+    #
     # fade slider
+    #
     self.fadeSlider = ctk.ctkSliderWidget()
     self.fadeSlider.minimum = 0
     self.fadeSlider.maximum = 1.0
     self.fadeSlider.singleStep = 0.05
     self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
     self.groupBoxLayout.addRow("Cross Fade", self.fadeSlider)
+
+  def onLayout(self):
+    self.emit("layoutRequested(mode)", self.layoutComboBox.currentText)
 
   def onFadeChanged(self,value):
     nodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
@@ -667,7 +676,7 @@ class LandmarksWidget(pqWidget):
     self.movingView = fiducial.GetAttribute('Annotations.MovingInSliceView')
     landmarkName = fiducial.GetName()
     self.pickLandmark(landmarkName)
-    self.emit("LandmarkMoved(landmarkName)", landmarkName)
+    self.emit("landmarkMoved(landmarkName)", landmarkName)
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""
@@ -684,7 +693,7 @@ class LandmarksWidget(pqWidget):
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
     self.removeButton.enabled = True
-    self.emit("LandmarkPicked(landmarkName)", landmarkName)
+    self.emit("landmarkPicked(landmarkName)", landmarkName)
 
   def syncLandmarks(self):
     """Make sure all volumes have a corresponding fiducials.
