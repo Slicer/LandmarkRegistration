@@ -120,7 +120,7 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors[viewName].showChildNodeTypes = True
       self.volumeSelectors[viewName].setMRMLScene( slicer.mrmlScene )
       self.volumeSelectors[viewName].setToolTip( "Pick the %s volume." % viewName.lower() )
-      parametersFormLayout.addRow("%s Volume: " % viewName, self.volumeSelectors[viewName])
+      parametersFormLayout.addRow("%s Volume " % viewName, self.volumeSelectors[viewName])
 
     self.volumeSelectors["Transformed"].addEnabled = True
     self.volumeSelectors["Transformed"].selectNodeUponCreation = True
@@ -131,7 +131,7 @@ class LandmarkRegistrationWidget:
     # - handy options for controlling the view
     #
     self.visualizationWidget = VisualizationWidget(self.logic)
-    self.visualizationWidget.connect("layoutRequested(mode)", self.onLayout)
+    self.visualizationWidget.connect("layoutRequested(mode,volumesToShow)", self.onLayout)
     parametersFormLayout.addRow(self.visualizationWidget.widget)
 
     #
@@ -194,7 +194,7 @@ class LandmarkRegistrationWidget:
       buttonLayout.addWidget(self.linearModeButtons[mode])
       self.linearModeButtons[mode].connect('clicked(bool)', self.onLinearTransform)
     self.linearModeButtons["Affine"].checked = True
-    linearFormLayout.addRow("Registration Mode: ", buttonLayout)
+    linearFormLayout.addRow("Registration Mode ", buttonLayout)
 
     self.linearTransformSelector = slicer.qMRMLNodeComboBox()
     self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
@@ -206,7 +206,7 @@ class LandmarkRegistrationWidget:
     self.linearTransformSelector.showChildNodeTypes = False
     self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
     self.linearTransformSelector.setToolTip( "Pick the transform for linear registration" )
-    linearFormLayout.addRow("Target Linear Transform: ", self.linearTransformSelector)
+    linearFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
 
     #
     # Hybrid B-Spline Registration Pane - initially hidden
@@ -227,7 +227,7 @@ class LandmarkRegistrationWidget:
     self.hybridTransformSelector.showChildNodeTypes = False
     self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
     self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
-    hybridFormLayout.addRow("Target B-Spline Transform: ", self.hybridTransformSelector)
+    hybridFormLayout.addRow("Target B-Spline Transform ", self.hybridTransformSelector)
 
     self.registrationTypeInterfaces = {}
     self.registrationTypeInterfaces['Linear'] = self.linearCollapsibleButton
@@ -297,12 +297,13 @@ class LandmarkRegistrationWidget:
     for registrationType in self.registrationTypes:
       self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
 
-  def onLayout(self, layoutMode="Axi/Sag/Cor"):
+  def onLayout(self, layoutMode="Axi/Sag/Cor",volumesToShow=None):
+    """When the layout is changed by the VisualizationWidget"""
     volumeNodes = []
     activeViewNames = []
     for viewName in self.viewNames:
       volumeNode = self.volumeSelectors[viewName].currentNode()
-      if volumeNode:
+      if volumeNode and volumesToShow and viewName in volumesToShow:
         volumeNodes.append(volumeNode)
         activeViewNames.append(viewName)
     import CompareVolumes
@@ -515,7 +516,7 @@ class pqWidget(object):
     """pseudo-emit - calls any slots connected to signal"""
     if self.connections.has_key(signal):
       for slot in self.connections[signal]:
-        slot(args)
+        slot(*args)
 
 
 class VisualizationWidget(pqWidget):
@@ -527,6 +528,10 @@ class VisualizationWidget(pqWidget):
   def __init__(self,logic):
     super(VisualizationWidget,self).__init__()
     self.logic = logic
+    self.volumes = ("Fixed", "Moving", "Transformed",)
+    self.layoutOptions = ("Axial", "Coronal", "Sagittal", "Axi/Sag/Cor",)
+    self.layoutOption = 'Axi/Sag/Cor'
+    self.volumeDisplayCheckboxes = {}
 
     # mimic the structure of the LandmarksWidget for visual
     # consistency (it needs sub widget so it can delete and refresh the internals)
@@ -540,21 +545,16 @@ class VisualizationWidget(pqWidget):
     self.boxHolder.layout().addWidget(self.groupBox)
 
     #
-    # layout options
+    # layout selection
     #
+    layoutHolder = qt.QWidget()
     layout = qt.QHBoxLayout()
-    self.layoutComboBox = qt.QComboBox()
-    # combo box 
-    self.layoutComboBox.addItem('Axial')
-    self.layoutComboBox.addItem('Sagittal')
-    self.layoutComboBox.addItem('Coronal')
-    self.layoutComboBox.addItem('Axi/Sag/Cor')
-    #self.layoutComboBox.addItem('Ax/Sag/Cor/3D')
-    layout.addWidget(self.layoutComboBox)
-    self.layoutButton = qt.QPushButton('Layout')
-    self.layoutButton.connect('clicked()', self.onLayout)
-    layout.addWidget(self.layoutButton)
-    self.groupBoxLayout.addRow("Orientation: ", layout)
+    layoutHolder.setLayout(layout)
+    for layoutOption in self.layoutOptions:
+      layoutButton = qt.QPushButton(layoutOption)
+      layoutButton.connect('clicked()', lambda lo=layoutOption: self.selectLayout(lo))
+      layout.addWidget(layoutButton)
+    self.groupBoxLayout.addRow("Laoyout", layoutHolder)
 
     #
     # Volume display selection
@@ -562,12 +562,14 @@ class VisualizationWidget(pqWidget):
     checkboxHolder = qt.QWidget()
     layout = qt.QHBoxLayout()
     checkboxHolder.setLayout(layout)
-    for volume in ("Fixed", "Moving", "Blend",):
-      b = qt.QCheckBox()
-      b.text = volume
-      layout.addWidget(b)
+    for volume in self.volumes:
+      checkBox = qt.QCheckBox()
+      checkBox.text = volume
+      checkBox.checked = True
+      checkBox.connect('toggled(bool)', self.updateVisualization)
+      layout.addWidget(checkBox)
+      self.volumeDisplayCheckboxes[volume] = checkBox
     self.groupBoxLayout.addRow("Display", checkboxHolder)
-
 
     #
     # fade slider
@@ -575,14 +577,29 @@ class VisualizationWidget(pqWidget):
     self.fadeSlider = ctk.ctkSliderWidget()
     self.fadeSlider.minimum = 0
     self.fadeSlider.maximum = 1.0
+    self.fadeSlider.value = 0.5
     self.fadeSlider.singleStep = 0.05
     self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
     self.groupBoxLayout.addRow("Cross Fade", self.fadeSlider)
 
-  def onLayout(self):
-    self.emit("layoutRequested(mode)", self.layoutComboBox.currentText)
+  def selectLayout(self,layoutOption):
+    """Keep track of the currently selected layout and trigger an update"""
+    self.layoutOption = layoutOption
+    self.updateVisualization()
+
+  def updateVisualization(self):
+    """When there's a change in the layout requested by either 
+    the layout or the volume display options, emit a signal that 
+    summarizes their state"""
+    volumesToShow = []
+    for volume in self.volumes:
+      if self.volumeDisplayCheckboxes[volume].checked:
+        volumesToShow.append(volume)
+    self.fadeSlider.enabled = "Transformed" in volumesToShow
+    self.emit("layoutRequested(mode,volumesToShow)", (self.layoutOption,volumesToShow))
 
   def onFadeChanged(self,value):
+    """Update all the slice compositing"""
     nodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
     for node in nodes.values():
       node.SetForegroundOpacity(value)
