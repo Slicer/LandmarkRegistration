@@ -294,16 +294,20 @@ class LandmarkRegistrationWidget:
     self.landmarksWidget.setVolumeNodes(volumeNodes)
     fixed = self.volumeSelectors['Fixed'].currentNode()
     moving = self.volumeSelectors['Moving'].currentNode()
+    transformed = self.volumeSelectors['Transformed'].currentNode()
     for registrationType in self.registrationTypes:
       self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
+    self.logic.hiddenFiducialVolumes = (transformed,)
 
   def onLayout(self, layoutMode="Axi/Sag/Cor",volumesToShow=None):
-    """When the layout is changed by the VisualizationWidget"""
+    """When the layout is changed by the VisualizationWidget
+    volumesToShow: list of the volumes to include, None means include all
+    """
     volumeNodes = []
     activeViewNames = []
     for viewName in self.viewNames:
       volumeNode = self.volumeSelectors[viewName].currentNode()
-      if volumeNode and volumesToShow and viewName in volumesToShow:
+      if volumeNode and not (volumesToShow and viewName not in volumesToShow):
         volumeNodes.append(volumeNode)
         activeViewNames.append(viewName)
     import CompareVolumes
@@ -554,7 +558,7 @@ class VisualizationWidget(pqWidget):
       layoutButton = qt.QPushButton(layoutOption)
       layoutButton.connect('clicked()', lambda lo=layoutOption: self.selectLayout(lo))
       layout.addWidget(layoutButton)
-    self.groupBoxLayout.addRow("Laoyout", layoutHolder)
+    self.groupBoxLayout.addRow("Layout", layoutHolder)
 
     #
     # Volume display selection
@@ -582,14 +586,27 @@ class VisualizationWidget(pqWidget):
     self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
     self.groupBoxLayout.addRow("Cross Fade", self.fadeSlider)
 
+    #
+    # zoom control
+    #
+    zoomHolder = qt.QWidget()
+    layout = qt.QHBoxLayout()
+    zoomHolder.setLayout(layout)
+    zooms = {"+": 0.9, "-": 1.1, "Fit": "Fit",}
+    for zoomLabel,zoomFactor in zooms.items():
+      zoomButton = qt.QPushButton(zoomLabel)
+      zoomButton.connect('clicked()', lambda zf=zoomFactor: self.onZoom(zf))
+      layout.addWidget(zoomButton)
+    self.groupBoxLayout.addRow("Zoom", zoomHolder)
+
   def selectLayout(self,layoutOption):
     """Keep track of the currently selected layout and trigger an update"""
     self.layoutOption = layoutOption
     self.updateVisualization()
 
   def updateVisualization(self):
-    """When there's a change in the layout requested by either 
-    the layout or the volume display options, emit a signal that 
+    """When there's a change in the layout requested by either
+    the layout or the volume display options, emit a signal that
     summarizes their state"""
     volumesToShow = []
     for volume in self.volumes:
@@ -603,6 +620,12 @@ class VisualizationWidget(pqWidget):
     nodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
     for node in nodes.values():
       node.SetForegroundOpacity(value)
+
+  def onZoom(self,zoomFactor):
+    import CompareVolumes
+    compareLogic = CompareVolumes.CompareVolumesLogic()
+    compareLogic.zoom(zoomFactor)
+
 
 
 class LandmarksWidget(pqWidget):
@@ -693,7 +716,7 @@ class LandmarksWidget(pqWidget):
     self.movingView = fiducial.GetAttribute('Annotations.MovingInSliceView')
     landmarkName = fiducial.GetName()
     self.pickLandmark(landmarkName)
-    self.emit("landmarkMoved(landmarkName)", landmarkName)
+    self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""
@@ -710,7 +733,7 @@ class LandmarksWidget(pqWidget):
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
     self.removeButton.enabled = True
-    self.emit("landmarkPicked(landmarkName)", landmarkName)
+    self.emit("landmarkPicked(landmarkName)", (landmarkName,))
 
   def syncLandmarks(self):
     """Make sure all volumes have a corresponding fiducials.
@@ -776,7 +799,8 @@ class LandmarkRegistrationLogic:
   requiring an instance of the Widget
   """
   def __init__(self):
-    self.linearMode = 'Affine'
+    self.linearMode = 'Rigid'
+    self.hiddenFiducialVolumes = ()
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
@@ -944,12 +968,18 @@ class LandmarkRegistrationLogic:
           allNamedFiducials[child.GetName()] = child
     # now add the missing ones
     for volumeNode in volumeNodes:
-      fiducialsByName = self.volumeFiducialsByName(volumeNode)
       for fiducialName in allNamedFiducials:
+        fiducialsByName = self.volumeFiducialsByName(volumeNode)
         if not fiducialsByName.has_key(fiducialName):
           point = [0,]*3
           allNamedFiducials[fiducialName].GetFiducialCoordinates(point)
           self.addFiducial(fiducialName, position=point,associatedNode=volumeNode)
+    # now make the flagged ones invisible
+    for volumeNode in self.hiddenFiducialVolumes:
+      children = self.volumeFiducialsAsList(volumeNode)
+      for fiducialNode in children:
+        fiducialNode.SetDisplayVisibility(False)
+
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     print("enable")
