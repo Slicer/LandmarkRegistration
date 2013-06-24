@@ -92,12 +92,12 @@ class LandmarkRegistrationWidget:
     self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
     # reload and run specific tests
-    scenarios = ("Basic", "Linear",)
+    scenarios = ("Basic", "Linear", "Thin Plate")
     for scenario in scenarios:
       button = qt.QPushButton("Reload and Test %s" % scenario)
       self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
       reloadFormLayout.addWidget(button)
-      button.connect('clicked()', lambda : self.onReloadAndTest(scenario=scenario))
+      button.connect('clicked()', lambda s=scenario: self.onReloadAndTest(scenario=s))
 
     #
     # Parameters Area
@@ -158,7 +158,7 @@ class LandmarkRegistrationWidget:
     self.registrationTypeBox = qt.QGroupBox("Registration Type")
     self.registrationTypeBox.setLayout(qt.QFormLayout())
     self.registrationTypeButtons = {}
-    self.registrationTypes = ("Linear", "Hybrid B-Spline")
+    self.registrationTypes = ("Linear", "Thin Plate", "Hybrid B-Spline")
     for registrationType in self.registrationTypes:
       self.registrationTypeButtons[registrationType] = qt.QRadioButton()
       self.registrationTypeButtons[registrationType].text = registrationType
@@ -193,7 +193,7 @@ class LandmarkRegistrationWidget:
       self.linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
       buttonLayout.addWidget(self.linearModeButtons[mode])
       self.linearModeButtons[mode].connect('clicked(bool)', self.onLinearTransform)
-    self.linearModeButtons["Affine"].checked = True
+    self.linearModeButtons[self.logic.linearMode].checked = True
     linearFormLayout.addRow("Registration Mode ", buttonLayout)
 
     self.linearTransformSelector = slicer.qMRMLNodeComboBox()
@@ -207,6 +207,19 @@ class LandmarkRegistrationWidget:
     self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
     self.linearTransformSelector.setToolTip( "Pick the transform for linear registration" )
     linearFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
+
+    #
+    # Thin Plate Spline Registration Pane - initially hidden
+    #
+    self.thinPlateCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.thinPlateCollapsibleButton.text = "Thin Plate Spline Registration"
+    thinPlateFormLayout = qt.QFormLayout()
+    self.thinPlateCollapsibleButton.setLayout(thinPlateFormLayout)
+    registrationFormLayout.addWidget(self.thinPlateCollapsibleButton)
+
+    self.thinPlateApply = qt.QPushButton("Apply")
+    self.thinPlateApply.connect('clicked(bool)', self.onThinPlateApply)
+    thinPlateFormLayout.addWidget(self.thinPlateApply)
 
     #
     # Hybrid B-Spline Registration Pane - initially hidden
@@ -231,6 +244,7 @@ class LandmarkRegistrationWidget:
 
     self.registrationTypeInterfaces = {}
     self.registrationTypeInterfaces['Linear'] = self.linearCollapsibleButton
+    self.registrationTypeInterfaces['Thin Plate'] = self.thinPlateCollapsibleButton
     self.registrationTypeInterfaces['Hybrid B-Spline'] = self.hybridCollapsibleButton
 
     for registrationType in self.registrationTypes:
@@ -371,7 +385,22 @@ class LandmarkRegistrationWidget:
     for mode in self.linearModes:
       if self.linearModeButtons[mode].checked:
         self.logic.linearMode = mode
+        self.onLinearActive(self.linearRegistrationActive.checked)
         break
+
+  def onThinPlateApply(self):
+    """Call this whenever thin plate needs to be calculated"""
+    fixed = self.volumeSelectors['Fixed'].currentNode()
+    moving = self.volumeSelectors['Moving'].currentNode()
+    if fixed and moving:
+      transformed = self.volumeSelectors['Transformed'].currentNode()
+      if not transformed:
+        volumesLogic = slicer.modules.volumes.logic()
+        transformedName = "%s-transformed" % moving.GetName()
+        transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+        self.volumeSelectors['Transformed'].setCurrentNode(transformed)
+      landmarks = self.logic.landmarksForVolumes((fixed,moving))
+      self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
 
   def onHybridTransform(self):
     """Call this whenever linear transform needs to be updated"""
@@ -687,7 +716,9 @@ class LandmarksWidget(pqWidget):
 
     # make a button for each current landmark
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
-    for landmarkName in landmarks.keys():
+    keys = landmarks.keys()
+    keys.sort()
+    for landmarkName in keys:
       button = qt.QPushButton(landmarkName)
       button.connect('clicked()', lambda l=landmarkName: self.pickLandmark(l))
       self.landmarkGroupBox.layout().addRow( button )
@@ -1022,6 +1053,67 @@ class LandmarkRegistrationLogic:
     print("disable")
     pass
 
+  def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
+    """
+    Fills the targetNode's vtkImageData with the source after
+    applying the transform.  Uses spacing from referenceNode. Ignores any vtkMRMLTransforms.
+    sourceNode, referenceNode, targetNode: vtkMRMLScalarVolumeNodes
+    transform: vtkAbstractTransform
+    """
+
+    # get the transform from RAS back to source pixel space
+    sourceRASToIJK = vtk.vtkMatrix4x4()
+    sourceNode.GetIJKToRASMatrix(sourceRASToIJK)
+    sourceRASToIJK.Invert()
+
+    # get the transform from target image space to RAS
+    referenceIJKToRAS = vtk.vtkMatrix4x4()
+    targetNode.GetIJKToRASMatrix(referenceIJKToRAS)
+
+    # this is the ijkToRAS concatenated with the passed in (abstract)transform
+    self.resliceTransform = vtk.vtkGeneralTransform()
+    self.resliceTransform.Concatenate(sourceRASToIJK)
+    self.resliceTransform.Concatenate(transform)
+    self.resliceTransform.Concatenate(referenceIJKToRAS)
+
+    # use the matrix to extract the volume and convert it to an array
+    self.reslice = vtk.vtkImageReslice()
+    self.reslice.SetInterpolationModeToLinear()
+    self.reslice.InterpolateOn()
+    self.reslice.SetResliceTransform(self.resliceTransform)
+    self.reslice.SetInput( sourceNode.GetImageData() )
+
+    dimensions = referenceNode.GetImageData().GetDimensions()
+    self.reslice.SetOutputExtent(0, dimensions[0]-1, 0, dimensions[1]-1, 0, dimensions[2]-1)
+    self.reslice.SetOutputOrigin((0,0,0))
+    self.reslice.SetOutputSpacing((1,1,1))
+
+    self.reslice.UpdateWholeExtent()
+    targetNode.SetAndObserveImageData(self.reslice.GetOutput())
+
+  def performThinPlateRegistration(self,fixed,moving,landmarks,transformed):
+    """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
+
+    print('performing thin plate registration')
+    transformed.SetAndObserveTransformNodeID(None)
+
+    self.thinPlateTransform = vtk.vtkThinPlateSplineTransform()
+    self.thinPlateTransform.SetBasisToR() # for 3D transform
+    points = {}
+    point = [0,]*3
+    for volumeNode in (fixed,moving):
+      points[volumeNode] = vtk.vtkPoints()
+    for fiducialName in landmarks.keys():
+      for volumeNode,fid in zip((fixed,moving),landmarks[fiducialName]):
+        fid.GetFiducialCoordinates(point)
+        points[volumeNode].InsertNextPoint(point)
+        print("%s: ('%s', %s)" % (volumeNode.GetName(), fiducialName, str(point)))
+    # since this is a resample transform, source is the fixed (resampling target) space
+    # and moving is the target space
+    self.thinPlateTransform.SetSourceLandmarks(points[fixed])
+    self.thinPlateTransform.SetTargetLandmarks(points[moving])
+    self.thinPlateTransform.Update()
+    self.resliceThroughTransform(moving,self.thinPlateTransform, fixed, transformed)
 
   def run(self,inputVolume,outputVolume):
     """
@@ -1065,9 +1157,12 @@ class LandmarkRegistrationTest(unittest.TestCase):
       self.test_LandmarkRegistration1()
     elif scenario == "Linear":
       self.test_LandmarkRegistration2()
+    elif scenario == "Thin Plate":
+      self.test_LandmarkRegistration3()
     else:
       self.test_LandmarkRegistration1()
       self.test_LandmarkRegistration2()
+      self.test_LandmarkRegistration3()
 
   def test_LandmarkRegistration1(self):
     """
@@ -1136,3 +1231,42 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.onLayout(layoutMode="Axi/Sag/Cor")
 
     self.delayDisplay('test_LandmarkRegistration2 passed!')
+
+  def test_LandmarkRegistration3(self):
+    """Test the thin plate spline transform"""
+    self.test_LandmarkRegistration2()
+
+    self.delayDisplay('starting test_LandmarkRegistration3')
+    w = slicer.modules.LandmarkRegistrationWidget
+    pre = w.volumeSelectors["Fixed"].currentNode()
+    post = w.volumeSelectors["Moving"].currentNode()
+
+    for name,point in (
+      ('L-0', [-91.81303405761719, -36.81013488769531, 76.78043365478516]),
+      ('L-1', [-91.81303405761719, -41.065155029296875, 19.57413101196289]),
+      ('L-2', [-89.75, -121.12535858154297, 33.5537223815918]),
+      ('L-3', [-91.29727935791016, -148.6207275390625, 54.980953216552734]),
+      ('L-4', [-89.75, -40.17485046386719, 153.87451171875]),
+      ('L-5', [-144.15321350097656, -128.45083618164062, 69.85309600830078]),
+      ('L-6', [-40.16628646850586, -128.70603942871094, 71.85968017578125]),):
+        w.logic.addFiducial(name, position=point,associatedNode=post)
+
+    for name,point in (
+      ('L-0', [-89.75, -48.97413635253906, 70.87068939208984]),
+      ('L-1', [-91.81303405761719, -47.7024040222168, 14.120864868164062]),
+      ('L-2', [-89.75, -130.1315155029297, 31.712587356567383]),
+      ('L-3', [-90.78448486328125, -160.6336212158203, 52.85344696044922]),
+      ('L-4', [-85.08663940429688, -47.26158905029297, 143.84193420410156]),
+      ('L-5', [-144.1186065673828, -138.91270446777344, 68.24700927734375]),
+      ('L-6', [-40.27879333496094, -141.29898071289062, 67.36009216308594]),):
+        w.logic.addFiducial(name, position=point,associatedNode=pre)
+
+
+    w.landmarksWidget.syncLandmarks()
+    w.landmarksWidget.pickLandmark('L-4')
+    w.linearRegistrationActive.checked = False
+    w.onRegistrationType("Thin Plate")
+    w.onThinPlateApply()
+
+    self.delayDisplay('test_LandmarkRegistration3 passed!')
+
