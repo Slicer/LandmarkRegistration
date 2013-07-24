@@ -1063,8 +1063,7 @@ class LandmarkRegistrationLogic:
 
     # get the transform from RAS back to source pixel space
     sourceRASToIJK = vtk.vtkMatrix4x4()
-    sourceNode.GetIJKToRASMatrix(sourceRASToIJK)
-    sourceRASToIJK.Invert()
+    sourceNode.GetRASToIJKMatrix(sourceRASToIJK)
 
     # get the transform from target image space to RAS
     referenceIJKToRAS = vtk.vtkMatrix4x4()
