@@ -230,17 +230,23 @@ class LandmarkRegistrationWidget:
     self.hybridCollapsibleButton.setLayout(hybridFormLayout)
     registrationFormLayout.addWidget(self.hybridCollapsibleButton)
 
-    self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
-    self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
-    self.hybridTransformSelector.selectNodeUponCreation = True
-    self.hybridTransformSelector.addEnabled = True
-    self.hybridTransformSelector.removeEnabled = True
-    self.hybridTransformSelector.noneEnabled = True
-    self.hybridTransformSelector.showHidden = False
-    self.hybridTransformSelector.showChildNodeTypes = False
-    self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
-    self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
-    hybridFormLayout.addRow("Target B-Spline Transform ", self.hybridTransformSelector)
+    self.hybridApply = qt.QPushButton("Apply")
+    self.hybridApply.connect('clicked(bool)', self.onHybridTransformApply)
+    hybridFormLayout.addWidget(self.hybridApply)
+
+    if False:
+      # no transform representation yet
+      self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
+      self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
+      self.hybridTransformSelector.selectNodeUponCreation = True
+      self.hybridTransformSelector.addEnabled = True
+      self.hybridTransformSelector.removeEnabled = True
+      self.hybridTransformSelector.noneEnabled = True
+      self.hybridTransformSelector.showHidden = False
+      self.hybridTransformSelector.showChildNodeTypes = False
+      self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
+      self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
+      hybridFormLayout.addRow("Target B-Spline Transform ", self.hybridTransformSelector)
 
     self.registrationTypeInterfaces = {}
     self.registrationTypeInterfaces['Linear'] = self.linearCollapsibleButton
@@ -402,9 +408,14 @@ class LandmarkRegistrationWidget:
       landmarks = self.logic.landmarksForVolumes((fixed,moving))
       self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
 
-  def onHybridTransform(self):
-    """Call this whenever linear transform needs to be updated"""
-    pass
+  def onHybridTransformApply(self):
+    """Call this whenever hybrid transform needs to be calculated"""
+    import os,sys
+    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'../../qt-loadable-modules')
+    if loadablePath not in sys.path:
+      sys.path.append(loadablePath)
+    import vtkSlicerPlastimatchModuleLogicPython
+    print('running...')
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
