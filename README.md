@@ -27,16 +27,16 @@ Use
 ===
 
 Linear:
-# load the two volumes to register
-# enter the LandmarkRegistration module
-# select Fixed and Moving (do not select transformed)
-# scroll to the Registration area and select Linear
-# enable the Registration Active checkbox (this will create a transformed volume)
-# pick Axi/Sag/Cor in the Visualization box (this will create a custom layout with fixed on top, moving in the middle, and fixed + transformed on the bottom)
-# place a fiducial on either the fixed or moving volumes (a corresponding one will be created on the other volume)
-# drag the fiducials in the fixed and moving volumes until they are on the same anatomical location.  The blended view will update automatically on mouse release.
-# place and adjust fiducials until registration is good.
-# Option: Similarity mode is Rigid + Scale and can be good for some cross-subject registration
+* load the two volumes to register
+* enter the LandmarkRegistration module
+* select Fixed and Moving (do not select transformed)
+* scroll to the Registration area and select Linear
+* enable the Registration Active checkbox (this will create a transformed volume)
+* pick Axi/Sag/Cor in the Visualization box (this will create a custom layout with fixed on top, moving in the middle, and fixed + transformed on the bottom)
+* place a fiducial on either the fixed or moving volumes (a corresponding one will be created on the other volume)
+* drag the fiducials in the fixed and moving volumes until they are on the same anatomical location.  The blended view will update automatically on mouse release.
+* place and adjust fiducials until registration is good.
+* Option: Similarity mode is Rigid + Scale and can be good for some cross-subject registration
 
 Caveats
 =======
