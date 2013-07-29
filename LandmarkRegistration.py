@@ -600,12 +600,13 @@ class LandmarkRegistrationWidget:
 
   def onHybridRegularization(self, valueR):
     self.hybridRegularization.setValue(valueR)
-    self.hybridRegularization.setValue(valueR)
+    self.logic.hybridRegularization = valueR
     print(valueR)
  #   pass
   
   def onHybridLandmarkPenalty(self, valueLP):
     self.hybridLandmarkPenalty.setValue(valueLP)
+    self.logic.hybridLandmarkPenalty = valueLP
     print(valueLP)
  #   pass
 
