@@ -1,4 +1,4 @@
-Enter file contents hereimport os
+import os
 import unittest
 from __main__ import vtk, qt, ctk, slicer
 #import vtkSlicerPlastimatchModuleLogicPython
