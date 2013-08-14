@@ -5,7 +5,6 @@ from __main__ import vtk, qt, ctk, slicer
 #
 # LandmarkRegistration
 #
-# Testing commits
 
 class LandmarkRegistration:
   def __init__(self, parent):
@@ -107,6 +106,9 @@ class LandmarkRegistrationWidget:
     parametersCollapsibleButton.text = "Parameters"
     self.layout.addWidget(parametersCollapsibleButton)
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
+
+    # NSh
+    self.sceneHasWarpedVolume = False
 
     self.volumeSelectors = {}
     self.viewNames = ("Fixed", "Moving", "Transformed")
@@ -309,7 +311,7 @@ class LandmarkRegistrationWidget:
     hybridFormLayout.addRow("Landmark Penalty:", buttonLayout)
 
     buttonLayout = qt.QHBoxLayout()
-    self.hybridMaxIteration = ctk.ctkSpinBox()
+    self.hybridMaxIteration = ctk.ctkDoubleSpinBox()
     self.hybridMaxIteration.minimum = 1
     self.hybridMaxIteration.maximum = 500.0
     self.hybridMaxIteration.value = 50
@@ -360,7 +362,7 @@ class LandmarkRegistrationWidget:
     #
     self.applyButton = qt.QPushButton("Run Registration")
     self.applyButton.toolTip = "Run the registration algorithm."
-    self.applyButton.enabled = False
+    self.applyButton.enabled = True
     parametersFormLayout.addRow(self.applyButton)
 
     # connections
@@ -415,7 +417,15 @@ class LandmarkRegistrationWidget:
     transformed = self.volumeSelectors['Transformed'].currentNode()
     for registrationType in self.registrationTypes:
       self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
-    self.logic.hiddenFiducialVolumes = (transformed,)
+      if self.registrationTypeInterfaces[registrationType].enabled:
+        print "NSh: both fixed and moving are selected"
+        if self.sceneHasWarpedVolume == False:
+            self.sceneHasWarpedVolume = True
+            print "NSh: attempting to create new warped volume New-Warped-Volume"
+            volumesLogic = slicer.modules.volumes.logic()
+            transformed = volumesLogic.CloneVolume(slicer.mrmlScene, fixed, "New-Warped-Volume")
+    # NSh: the line below controls if landmarks are shown on transformed volume
+    #self.logic.hiddenFiducialVolumes = (transformed,)
 
   def onLayout(self, layoutMode="Axi/Sag/Cor",volumesToShow=None):
     """When the layout is changed by the VisualizationWidget
@@ -435,7 +445,8 @@ class LandmarkRegistrationWidget:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
     elif layoutMode == 'Axi/Sag/Cor':
       self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
-    self.overlayFixedOnTransformed()
+    # NSh test - remove visual confusion
+    #self.overlayFixedOnTransformed()
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
 
@@ -538,10 +549,12 @@ class LandmarkRegistrationWidget:
         fid.GetFiducialCoordinates(point)
         points[volumeNode].InsertNextPoint(point)
         print("%s: ('%s', %s)" % (volumeNode.GetName(), fiducialName, str(point)))
-
+  
     # Set landmarks from Slicer (not required)
+    print "trying to SetFixed/MovingLandmarks"
     reg.SetFixedLandmarks(points[fixed])
     reg.SetMovingLandmarks(points[moving])
+    print "Done SetFixed/MovingLandmarks"
 
 # Set landmarks from files (not required)re
 #reg.SetFixedLandmarksFn("fixed_landmarks.fcsv")
@@ -567,12 +580,30 @@ class LandmarkRegistrationWidget:
     reg.SetPar("grad_tol", "1.5")
     reg.SetPar("res", str(self.logic.hybridSubsampling))
     reg.SetPar("grid_spac", str(self.logic.hybridGridSize))
+    reg.SetPar("regularization_lambda", str(self.logic.hybridRegularization))
+    reg.SetPar("landmark_stiffness", str(self.logic.hybridLandmarkPenalty))
 # Run registration
     print "starting RunReg"
     reg.RunRegistration()
     print "control went past RunReg"
 # Done
 
+
+    transformed = self.volumeSelectors['Transformed'].currentNode()
+    volumeNodes = self.currentVolumeNodes()
+    for i in range(reg.GetWarpedLandmarks().GetNumberOfPoints()):
+      # find landmark L-str(i) on transformed, then set its position to reg.GetWarpedLandmarks().GetPoint(i)
+      fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
+      if fiducialsByName.has_key("L-"+str(i)):
+        landmarksFiducials = fiducialsByName["L-"+str(i)]
+        for fid in landmarksFiducials:
+          volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+          if volumeNodeID == transformed.GetID(): 
+              print "found landmark %s on transformed" % str(i)
+              fid.SetFiducial(reg.GetWarpedLandmarks().GetPoint(i), True, True)
+      # old logic of adding extra landmarks
+      #self.logic.addFiducial("W-"+str(i), reg.GetWarpedLandmarks().GetPoint(i), associatedNode=transformed)
+    
   def onHybridCost(self):
     for cost in self.hybridCosts:
       if self.hybridCostButtons[cost].checked:
@@ -1503,4 +1534,3 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.onThinPlateApply()
 
     self.delayDisplay('test_LandmarkRegistration3 passed!')
-
