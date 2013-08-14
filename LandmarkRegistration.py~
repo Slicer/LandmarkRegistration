@@ -5,7 +5,6 @@ from __main__ import vtk, qt, ctk, slicer
 #
 # LandmarkRegistration
 #
-# Testing commits
 
 class LandmarkRegistration:
   def __init__(self, parent):
