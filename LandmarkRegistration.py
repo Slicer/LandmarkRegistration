@@ -524,7 +524,7 @@ class LandmarkRegistrationWidget:
   def onHybridApply(self):
     import os,sys
     import vtk
-    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'../../qt-loadable-modules')
+    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'..'+os.sep+'..'+os.sep+'qt-loadable-modules')
     if loadablePath not in sys.path:
       sys.path.append(loadablePath)
     import vtkSlicerPlastimatchModuleLogicPython
@@ -555,10 +555,6 @@ class LandmarkRegistrationWidget:
     reg.SetFixedLandmarks(points[fixed])
     reg.SetMovingLandmarks(points[moving])
     print "Done SetFixed/MovingLandmarks"
-
-# Set landmarks from files (not required)re
-#reg.SetFixedLandmarksFn("fixed_landmarks.fcsv")
-#reg.SetMovingLandmarksFn("moving_landmarks.fcsv")
 
     print( "at click time, cost is %s" % str(self.logic.hybridCost))
     print( "at click time, hardware is %s" % str(self.logic.hybridHardware))
