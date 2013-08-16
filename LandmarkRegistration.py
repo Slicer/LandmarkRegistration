@@ -522,17 +522,18 @@ class LandmarkRegistrationWidget:
     pass
   
   def onHybridApply(self):
-    import os,sys
-    import vtk
+    import os, sys, vtk
+    import vtkSlicerPlastimatchModuleLogicPython
+    print('Run B-spline - Apply button pressed')
+    
     loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'..'+os.sep+'..'+os.sep+'qt-loadable-modules')
     if loadablePath not in sys.path:
       sys.path.append(loadablePath)
-    import vtkSlicerPlastimatchModuleLogicPython
-    print('Run B-spline - Apply button pressed')
+    
     reg = vtkSlicerPlastimatchModuleLogicPython.vtkSlicerPlastimatchLogic()
     reg.SetMRMLScene(slicer.mrmlScene)
 
-    # Set input/output images (required) and input transformation (not required)
+    # Set input/output images
     reg.SetFixedID(self.volumeSelectors['Fixed'].currentNode().GetID())
     reg.SetMovingID(self.volumeSelectors['Moving'].currentNode().GetID())
     reg.SetOutputVolumeID(self.volumeSelectors['Transformed'].currentNode().GetID())
@@ -578,12 +579,18 @@ class LandmarkRegistrationWidget:
     reg.SetPar("grid_spac", str(self.logic.hybridGridSize))
     reg.SetPar("regularization_lambda", str(self.logic.hybridRegularization))
     reg.SetPar("landmark_stiffness", str(self.logic.hybridLandmarkPenalty))
-# Run registration
+    
+    # Run registration
     print "starting RunReg"
     reg.RunRegistration()
     print "control went past RunReg"
-# Done
+    # Done
 
+    # Warp landmarks
+    print "starting WarpLandmarks"
+    reg.WarpLandmarks()
+    print "control went past WarpLandmarks"
+    # Done
 
     transformed = self.volumeSelectors['Transformed'].currentNode()
     volumeNodes = self.currentVolumeNodes()
