@@ -323,6 +323,13 @@ class LandmarkRegistrationWidget:
     hybridFormLayout.addRow("Max iterations:", buttonLayout)
 
     buttonLayout = qt.QHBoxLayout()
+    self.hybridWarpedLandm = ctk.ctkPathLineEdit()
+    self.hybridWarpedLandm.setCurrentPath('c:/nadya/work/synthetic/warped.fcsv')
+    self.hybridWarpedLandm.setToolTip( "Full path to file" )
+    buttonLayout.addWidget(self.hybridWarpedLandm)
+    hybridFormLayout.addRow("Warped Landmarks (file):", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
     self.hybridApply = qt.QPushButton("Run B-spline")
     self.hybridApply.setToolTip( "Run B-spline" )
     buttonLayout.addWidget(self.hybridApply)
