@@ -540,18 +540,18 @@ class LandmarkRegistrationWidget:
  
   def runOneIterationPlastimatchRegistration(self, fixedDataName, movingDataName):
     import os, sys, vtk
-    import vtkSlicerPlastimatchModuleLogicPython
+    import vtkSlicerPlastimatchPyModuleLogicPython
 
     loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'..'+os.sep+'..'+os.sep+'qt-loadable-modules')
     if loadablePath not in sys.path:
       sys.path.append(loadablePath)
     
-    reg = vtkSlicerPlastimatchModuleLogicPython.vtkSlicerPlastimatchLogic()
+    reg = vtkSlicerPlastimatchPyModuleLogicPython.vtkSlicerPlastimatchPyModuleLogic()
     reg.SetMRMLScene(slicer.mrmlScene)
 
     # Set input/output images
-    reg.SetFixedID(self.volumeSelectors[fixedDataName].currentNode().GetID())
-    reg.SetMovingID(self.volumeSelectors[movingDataName].currentNode().GetID())
+    reg.SetFixedImageID(self.volumeSelectors[fixedDataName].currentNode().GetID())
+    reg.SetMovingImageID(self.volumeSelectors[movingDataName].currentNode().GetID())
     reg.SetOutputVolumeID(self.volumeSelectors['Transformed'].currentNode().GetID())
 
     fixed = self.volumeSelectors[fixedDataName].currentNode()
