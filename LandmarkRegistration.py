@@ -1,7 +1,7 @@
 import os
 import unittest
 from __main__ import vtk, qt, ctk, slicer
-
+#import vtkSlicerPlastimatchModuleLogicPython
 #
 # LandmarkRegistration
 #
@@ -58,7 +58,7 @@ class LandmarkRegistrationWidget:
       self.parent.setMRMLScene(slicer.mrmlScene)
     else:
       self.parent = parent
-    self.layout = self.parent.layout()
+      self.layout = self.parent.layout()
     if not parent:
       self.setup()
       self.parent.show()
@@ -106,6 +106,9 @@ class LandmarkRegistrationWidget:
     parametersCollapsibleButton.text = "Parameters"
     self.layout.addWidget(parametersCollapsibleButton)
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
+
+    # NSh
+    self.sceneHasWarpedVolume = False
 
     self.volumeSelectors = {}
     self.viewNames = ("Fixed", "Moving", "Transformed")
@@ -230,23 +233,128 @@ class LandmarkRegistrationWidget:
     self.hybridCollapsibleButton.setLayout(hybridFormLayout)
     registrationFormLayout.addWidget(self.hybridCollapsibleButton)
 
-    self.hybridApply = qt.QPushButton("Apply")
-    self.hybridApply.connect('clicked(bool)', self.onHybridTransformApply)
-    hybridFormLayout.addWidget(self.hybridApply)
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridCostButtons = {}
+    self.hybridCosts = ("MSE", "MI")
+    for cost in self.hybridCosts:
+      self.hybridCostButtons[cost] = qt.QRadioButton()
+      self.hybridCostButtons[cost].text = cost
+      self.hybridCostButtons[cost].setToolTip( "Register ising %s cost function." % cost )
+      buttonLayout.addWidget(self.hybridCostButtons[cost])
+      self.hybridCostButtons[cost].connect('clicked(bool)', self.onHybridCost)
+    self.hybridCostButtons[self.logic.hybridCost].checked = True
+    hybridFormLayout.addRow("Cost Function:", buttonLayout)
 
-    if False:
-      # no transform representation yet
-      self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
-      self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
-      self.hybridTransformSelector.selectNodeUponCreation = True
-      self.hybridTransformSelector.addEnabled = True
-      self.hybridTransformSelector.removeEnabled = True
-      self.hybridTransformSelector.noneEnabled = True
-      self.hybridTransformSelector.showHidden = False
-      self.hybridTransformSelector.showChildNodeTypes = False
-      self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
-      self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
-      hybridFormLayout.addRow("Target B-Spline Transform ", self.hybridTransformSelector)
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridHardwareButtons = {}
+    self.hybridHardwares = ("CPU", "GPU")
+    for hardware in self.hybridHardwares:
+      self.hybridHardwareButtons[hardware] = qt.QRadioButton()
+      self.hybridHardwareButtons[hardware].text = hardware
+      self.hybridHardwareButtons[hardware].setToolTip( "Calculate on %s." % hardware )
+      buttonLayout.addWidget(self.hybridHardwareButtons[hardware])
+      self.hybridHardwareButtons[hardware].connect('clicked(bool)', self.onHybridHardware)
+    self.hybridHardwareButtons[self.logic.hybridHardware].checked = True
+    hybridFormLayout.addRow("Hardware:", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridOutTypeButtons = {}
+    self.hybridOutTypes = ("auto", "char", "uchar", "short", "ushort", "long", "ulong", "float", "double")
+    for outType in self.hybridOutTypes:
+      self.hybridOutTypeButtons[outType] = qt.QRadioButton()
+      self.hybridOutTypeButtons[outType].text = outType
+      self.hybridOutTypeButtons[outType].setToolTip( "Set %s output type." % outType )
+      buttonLayout.addWidget(self.hybridOutTypeButtons[outType])
+      self.hybridOutTypeButtons[outType].connect('clicked(bool)', self.onHybridOutType)
+    self.hybridOutTypeButtons[self.logic.hybridOutType].checked = True
+    hybridFormLayout.addRow("Output type:", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridSubsampling = qt.QLineEdit()
+    self.hybridSubsampling.setText('2 2 2')
+    self.hybridSubsampling.setToolTip( "Subsampling rate" ) 
+    buttonLayout.addWidget(self.hybridSubsampling)
+    self.hybridSubsampling.connect('textEdited(QString)', self.onHybridSubsampling)
+    hybridFormLayout.addRow("Subsampling rate (vox):", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    #self.hybridGridSize = {}
+    self.hybridGridSize = qt.QLineEdit()
+    self.hybridGridSize.setText('50 50 50')
+    self.hybridGridSize.setToolTip( "Set B-spline grid spacing" )
+    buttonLayout.addWidget(self.hybridGridSize)
+    self.hybridGridSize.connect('textEdited(QString)', self.onHybridGridSize)
+    hybridFormLayout.addRow("Grid Size (mm):", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    #self.hybridRegularization = {}
+    self.hybridRegularization = ctk.ctkSliderWidget()
+    self.hybridRegularization.minimum = 0.0
+    self.hybridRegularization.maximum = 1.0
+    self.hybridRegularization.value = 0.0
+    self.hybridRegularization.singleStep = 0.0001
+    self.hybridRegularization.setToolTip( "Second derivative smoothing penalty" )
+    buttonLayout.addWidget(self.hybridRegularization)
+    self.hybridRegularization.connect('valueChanged(double)', self.onHybridRegularization)
+    hybridFormLayout.addRow("Regularization:", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    #self.hybridLandmarkPenalty = {}
+    self.hybridLandmarkPenalty = ctk.ctkSliderWidget()
+    self.hybridLandmarkPenalty.minimum = 0.0
+    self.hybridLandmarkPenalty.maximum = 10.0
+    self.hybridLandmarkPenalty.value = 0.05
+    self.hybridLandmarkPenalty.singleStep = 0.01
+    self.hybridLandmarkPenalty.setToolTip( "Penalty for landmark mismatch" )
+    buttonLayout.addWidget(self.hybridLandmarkPenalty)
+    self.hybridLandmarkPenalty.connect('valueChanged(double)', self.onHybridLandmarkPenalty)
+    hybridFormLayout.addRow("Landmark Penalty:", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridMaxIteration = ctk.ctkDoubleSpinBox()
+    self.hybridMaxIteration.minimum = 1
+    self.hybridMaxIteration.maximum = 500
+    self.hybridMaxIteration.value = 50
+    self.hybridMaxIteration.singleStep = 1
+    self.hybridMaxIteration.setToolTip( "Maximum number of iterations" )
+    #self.hybridMaxIteration.setValue(self.logic.hybridMaxIteration)
+    buttonLayout.addWidget(self.hybridMaxIteration)
+    self.hybridMaxIteration.connect('valueChanged(double)', self.onHybridMaxIteration)
+    hybridFormLayout.addRow("Max iterations:", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridWarpedLandm = ctk.ctkPathLineEdit()
+    self.hybridWarpedLandm.setCurrentPath('c:/nadya/work/synthetic/warped.fcsv')
+    self.hybridWarpedLandm.setToolTip( "Full path to file" )
+    buttonLayout.addWidget(self.hybridWarpedLandm)
+    hybridFormLayout.addRow("Warped Landmarks (file):", buttonLayout)
+
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridApply = qt.QPushButton("Run B-spline")
+    self.hybridApply.setToolTip( "Run B-spline" )
+    buttonLayout.addWidget(self.hybridApply)
+    self.hybridApply.connect('clicked(bool)', self.onHybridApply)
+    hybridFormLayout.addRow("", buttonLayout)
+   
+    buttonLayout = qt.QHBoxLayout()
+    self.hybridStop = qt.QPushButton("Stop B-spline")
+    self.hybridStop.setToolTip( "Stop B-spline" )
+    buttonLayout.addWidget(self.hybridStop)
+    self.hybridStop.connect('clicked(bool)', self.onHybridStop)
+    hybridFormLayout.addRow("", buttonLayout)
+
+
+    #self.hybridTransformSelector = slicer.qMRMLNodeComboBox()
+    #self.hybridTransformSelector.nodeTypes = ( ("vtkMRMLBSplineTransformNode"), "" )
+    #self.hybridTransformSelector.selectNodeUponCreation = True
+    #self.hybridTransformSelector.addEnabled = True
+    #self.hybridTransformSelector.removeEnabled = True
+    #self.hybridTransformSelector.noneEnabled = True
+    #self.hybridTransformSelector.showHidden = False
+    #self.hybridTransformSelector.showChildNodeTypes = False
+    #self.hybridTransformSelector.setMRMLScene( slicer.mrmlScene )
+    #self.hybridTransformSelector.setToolTip( "Pick the transform for Hybrid B-Spline registration" )
+    #hybridFormLayout.addRow("Target B-Spline Transform ", self.hybridTransformSelector)
 
     self.registrationTypeInterfaces = {}
     self.registrationTypeInterfaces['Linear'] = self.linearCollapsibleButton
@@ -262,7 +370,7 @@ class LandmarkRegistrationWidget:
     #
     self.applyButton = qt.QPushButton("Run Registration")
     self.applyButton.toolTip = "Run the registration algorithm."
-    self.applyButton.enabled = False
+    self.applyButton.enabled = True
     parametersFormLayout.addRow(self.applyButton)
 
     # connections
@@ -317,7 +425,15 @@ class LandmarkRegistrationWidget:
     transformed = self.volumeSelectors['Transformed'].currentNode()
     for registrationType in self.registrationTypes:
       self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
-    self.logic.hiddenFiducialVolumes = (transformed,)
+      if self.registrationTypeInterfaces[registrationType].enabled:
+        print "NSh: both fixed and moving are selected"
+        if self.sceneHasWarpedVolume == False:
+            self.sceneHasWarpedVolume = True
+            print "NSh: attempting to create new warped volume New-Warped-Volume"
+            volumesLogic = slicer.modules.volumes.logic()
+            transformed = volumesLogic.CloneVolume(slicer.mrmlScene, fixed, "New-Warped-Volume")
+    # NSh: the line below controls if landmarks are shown on transformed volume
+    #self.logic.hiddenFiducialVolumes = (transformed,)
 
   def onLayout(self, layoutMode="Axi/Sag/Cor",volumesToShow=None):
     """When the layout is changed by the VisualizationWidget
@@ -337,7 +453,8 @@ class LandmarkRegistrationWidget:
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
     elif layoutMode == 'Axi/Sag/Cor':
       self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
-    self.overlayFixedOnTransformed()
+    # NSh test - remove visual confusion
+    #self.overlayFixedOnTransformed()
     self.updateSliceNodesByVolumeID()
     self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
 
@@ -408,14 +525,168 @@ class LandmarkRegistrationWidget:
       landmarks = self.logic.landmarksForVolumes((fixed,moving))
       self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
 
-  def onHybridTransformApply(self):
-    """Call this whenever hybrid transform needs to be calculated"""
-    import os,sys
-    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'../../qt-loadable-modules')
+  def onHybridTransform(self):
+    """Call this whenever hybrid transform needs to be updated"""
+    pass
+  
+  def onHybridApply(self):
+    print('Run B-spline - Apply button pressed')
+    self.bsplineRegistration = True
+    self.runOneIterationPlastimatchRegistration('Fixed', 'Moving')
+    if int(self.logic.hybridMaxIteration) > 1:
+      for i in range(int(self.logic.hybridMaxIteration)-1):
+        if self.bsplineRegistration:
+          self.runOneIterationPlastimatchRegistration('Fixed', 'Transformed')
+ 
+  def runOneIterationPlastimatchRegistration(self, fixedDataName, movingDataName):
+    import os, sys, vtk
+    import vtkSlicerPlastimatchPyModuleLogicPython
+
+    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'..'+os.sep+'..'+os.sep+'qt-loadable-modules')
     if loadablePath not in sys.path:
       sys.path.append(loadablePath)
-    import vtkSlicerPlastimatchModuleLogicPython
-    print('running...')
+    
+    reg = vtkSlicerPlastimatchPyModuleLogicPython.vtkSlicerPlastimatchPyModuleLogic()
+    reg.SetMRMLScene(slicer.mrmlScene)
+
+    # Set input/output images
+    reg.SetFixedImageID(self.volumeSelectors[fixedDataName].currentNode().GetID())
+    reg.SetMovingImageID(self.volumeSelectors[movingDataName].currentNode().GetID())
+    reg.SetOutputVolumeID(self.volumeSelectors['Transformed'].currentNode().GetID())
+
+    fixed = self.volumeSelectors[fixedDataName].currentNode()
+    moving = self.volumeSelectors[movingDataName].currentNode()
+    landmarks = self.logic.landmarksForVolumes((fixed,moving))
+    points = {}
+    point = [0,]*3
+    for volumeNode in (fixed,moving):
+      points[volumeNode] = vtk.vtkPoints()
+    for fiducialName in landmarks.keys():
+      for volumeNode,fid in zip((fixed,moving),landmarks[fiducialName]):
+        fid.GetFiducialCoordinates(point)
+        points[volumeNode].InsertNextPoint(point)
+        print("%s: ('%s', %s)" % (volumeNode.GetName(), fiducialName, str(point)))
+  
+    # Set landmarks from Slicer (not required)
+    print "trying to SetFixed/MovingLandmarks"
+    reg.SetFixedLandmarks(points[fixed])
+    reg.SetMovingLandmarks(points[moving])
+    print "Done SetFixed/MovingLandmarks"
+
+    print( "at click time, cost is %s" % str(self.logic.hybridCost))
+    print( "at click time, hardware is %s" % str(self.logic.hybridHardware))
+    print( "at click time, output type is %s" % str(self.logic.hybridOutType))
+    print( "at click time, max iter is %s" % str(self.logic.hybridMaxIteration))
+    print( "at click time, subsampling is %s" % str(self.logic.hybridSubsampling))
+    print( "at click time, grid size is %s" % str(self.logic.hybridGridSize))
+    print( "at click time, Regularization is %s" % str(self.logic.hybridRegularization))
+    print( "at click time, Landm Penalty is %s" % str(self.logic.hybridLandmarkPenalty))
+
+    # Add stage and set its parameters (to be set from GUI controls..)
+    reg.AddStage()
+    reg.SetPar("xform", "bspline")
+    reg.SetPar("optim", "lbfgsb")
+    reg.SetPar("impl", "plastimatch")
+    reg.SetPar("metric", str(self.logic.hybridCost))
+    reg.SetPar("max_its", "5")
+    reg.SetPar("convergence_tol", "5")
+    reg.SetPar("grad_tol", "1.5")
+    reg.SetPar("res", str(self.logic.hybridSubsampling))
+    reg.SetPar("grid_spac", str(self.logic.hybridGridSize))
+    reg.SetPar("regularization_lambda", str(self.logic.hybridRegularization))
+    reg.SetPar("landmark_stiffness", str(self.logic.hybridLandmarkPenalty))
+    
+    # Run registration
+    print "starting RunReg"
+    reg.RunRegistration()
+    print "control went past RunReg"
+    # Done
+
+    # Warp landmarks
+    print "starting WarpLandmarks"
+    reg.WarpLandmarks()
+    print "control went past WarpLandmarks"
+    # Done
+
+    transformed = self.volumeSelectors['Transformed'].currentNode()
+    volumeNodes = self.currentVolumeNodes()
+    for i in range(reg.GetWarpedLandmarks().GetNumberOfPoints()):
+      # find landmark L-str(i) on transformed, then set its position to reg.GetWarpedLandmarks().GetPoint(i)
+      fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
+      if fiducialsByName.has_key("L-"+str(i)):
+        landmarksFiducials = fiducialsByName["L-"+str(i)]
+        for fid in landmarksFiducials:
+          volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+          if volumeNodeID == transformed.GetID(): 
+              print "found landmark %s on transformed" % str(i)
+              fid.SetFiducial(reg.GetWarpedLandmarks().GetPoint(i), True, True)
+      # old logic of adding extra landmarks
+      #self.logic.addFiducial("W-"+str(i), reg.GetWarpedLandmarks().GetPoint(i), associatedNode=transformed)
+
+    # Update view
+    slicer.app.processEvents()
+    transformed.Modified()
+
+  def onHybridStop(self):
+    self.bsplineRegistration = False
+  
+  def onHybridCost(self):
+    for cost in self.hybridCosts:
+      if self.hybridCostButtons[cost].checked:
+        self.logic.hybridCost = cost
+        print("Cost is %s" % str(cost))
+  #  pass
+
+  def onHybridHardware(self):
+    for hardware in self.hybridHardwares:
+      if self.hybridHardwareButtons[hardware].checked:
+        self.logic.hybridHardware = hardware
+        print("Hardware is %s" % str(hardware))
+   # pass
+  
+  def onHybridOutType(self):
+    for outType in self.hybridOutTypes:  
+      if self.hybridOutTypeButtons[outType].checked:
+        self.logic.hybridOutType = outType
+        print("Output type is %s" % str(outType))
+   # pass
+
+  def onHybridSubsampling(self,valueSS):
+    self.hybridSubsampling.setText(valueSS)
+    self.logic.hybridSubsampling = valueSS
+    print "on hybrid subsampling event handler"
+    print(valueSS)
+   # pass
+
+  def onHybridGridSize(self,valueGS):
+    self.hybridGridSize.setText(valueGS)
+    self.logic.hybridGridSize = valueGS
+    print "on hybrid grid size event handler"
+    print(valueGS)
+  #  pass
+
+  def onHybridRegularization(self, valueR):
+    self.hybridRegularization.setValue(valueR)
+    self.logic.hybridRegularization = valueR
+    print(valueR)
+ #   pass
+  
+  def onHybridLandmarkPenalty(self, valueLP):
+    self.hybridLandmarkPenalty.setValue(valueLP)
+    self.logic.hybridLandmarkPenalty = valueLP
+    print(valueLP)
+ #   pass
+
+  def onHybridMaxIteration(self, valueMI):
+    self.hybridMaxIteration.setValue(valueMI)
+    self.logic.hybridMaxIteration = valueMI
+    print(valueMI)
+ #   pass
+
+  def onHybridWarpedLandm(self):
+    """Run B-spline"""
+#self.logic.writeWarpedLandm(self.hybridWarpedLandm.currentPath)
+  #  pass
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
@@ -842,6 +1113,15 @@ class LandmarkRegistrationLogic:
   """
   def __init__(self):
     self.linearMode = 'Rigid'
+    self.hybridCost = 'MSE'
+    self.hybridHardware = 'CPU'
+    self.hybridOutType = 'auto'
+    self.hybridMaxIteration = 50
+    self.hybridSubsampling = '4 4 2'
+    self.hybridGridSize = '50 50 50'
+    self.hybridRegularization = 0.005
+    self.hybridLandmarkPenalty = 0.05
+
     self.hiddenFiducialVolumes = ()
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
@@ -1074,7 +1354,8 @@ class LandmarkRegistrationLogic:
 
     # get the transform from RAS back to source pixel space
     sourceRASToIJK = vtk.vtkMatrix4x4()
-    sourceNode.GetRASToIJKMatrix(sourceRASToIJK)
+    sourceNode.GetIJKToRASMatrix(sourceRASToIJK)
+    sourceRASToIJK.Invert()
 
     # get the transform from target image space to RAS
     referenceIJKToRAS = vtk.vtkMatrix4x4()
@@ -1279,4 +1560,3 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.onThinPlateApply()
 
     self.delayDisplay('test_LandmarkRegistration3 passed!')
-
