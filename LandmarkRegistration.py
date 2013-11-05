@@ -51,6 +51,7 @@ class LandmarkRegistrationWidget:
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
+    self.viewNames = ("Fixed", "Moving", "Transformed")
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -108,7 +109,6 @@ class LandmarkRegistrationWidget:
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
     self.volumeSelectors = {}
-    self.viewNames = ("Fixed", "Moving", "Transformed")
     for viewName in self.viewNames:
       self.volumeSelectors[viewName] = slicer.qMRMLNodeComboBox()
       self.volumeSelectors[viewName].nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
@@ -278,18 +278,20 @@ class LandmarkRegistrationWidget:
 
   def cleanup(self):
     self.removeObservers()
+    self.landmarksWidget.removeLandmarkObservers()
 
   def addObservers(self):
     """Observe the mrml scene for changes that we wish to respond to.
     scene observer:
      - whenever a new node is added, check if it was a new fiducial.
-       if so, transform it into a landmark by putting it in the correct
-       hierarchy and creating a matching fiducial for other voluemes
+       if so, transform it into a landmark by creating a matching
+       fiducial for other volumes
     fiducial obserers:
      - when fiducials are manipulated, perform (or schedule) an update
        to the currently active registration method.
     """
     tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarksWidget.requestNodeAddedUpdate)
+    tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeRemovedEvent, self.landmarksWidget.requestNodeAddedUpdate)
     self.observerTags.append( (slicer.mrmlScene, tag) )
 
   def removeObservers(self):
@@ -415,7 +417,7 @@ class LandmarkRegistrationWidget:
     if loadablePath not in sys.path:
       sys.path.append(loadablePath)
     import vtkSlicerPlastimatchModuleLogicPython
-    print('running...')
+    print('running hybrid...')
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
@@ -438,15 +440,18 @@ class LandmarkRegistrationWidget:
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
-      for fidList in landmarks.values():
-        for fid in fidList:
-          displayNode = fid.GetDisplayNode()
+      for landmarkName in landmarks:
+        for fiducialList,index in landmarks[landmarkName]:
+          displayNode = fiducialList.GetDisplayNode()
           displayNode.RemoveAllViewNodeIDs()
-          volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+          volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
           if volumeNodeID:
             if self.sliceNodesByVolumeID.has_key(volumeNodeID):
               for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
                 displayNode.AddViewNodeID(sliceNode.GetID())
+                for hiddenVolume in self.logic.hiddenFiducialVolumes:
+                  if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
+                    displayNode.SetVisibility(False)
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -456,14 +461,13 @@ class LandmarkRegistrationWidget:
       self.restrictLandmarksToViews()
     self.updateSliceNodesByVolumeID()
     volumeNodes = self.currentVolumeNodes()
-    fiducialsByName = self.logic.landmarksForVolumes(volumeNodes)
-    if fiducialsByName.has_key(landmarkName):
-      landmarksFiducials = fiducialsByName[landmarkName]
-      for fid in landmarksFiducials:
-        volumeNodeID = fid.GetAttribute("AssociatedNodeID")
+    landmarksByName = self.logic.landmarksForVolumes(volumeNodes)
+    if landmarksByName.has_key(landmarkName):
+      for fiducialList,index in landmarksByName[landmarkName]:
+        volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
         if self.sliceNodesByVolumeID.has_key(volumeNodeID):
           point = [0,]*3
-          fid.GetFiducialCoordinates(point)
+          fiducialList.GetNthFiducialPosition(index,point)
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
             if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
@@ -472,7 +476,8 @@ class LandmarkRegistrationWidget:
     """Called when a landmark is moved (probably through
     manipulation of the widget in the slice view).
     This updates the active registration"""
-    if self.linearRegistrationActive.checked and not self.landmarksWidget.movingView:
+    # if self.linearRegistrationActive.checked and not self.landmarksWidget.movingView:
+    if self.linearRegistrationActive.checked:
       self.onLinearActive(True)
 
   def onApplyButton(self):
@@ -708,9 +713,6 @@ class LandmarksWidget(pqWidget):
     self.landmarkGroupBox.setLayout(qt.QFormLayout())
     # add the action buttons at the top
     actionButtons = qt.QHBoxLayout()
-    self.syncButton = qt.QPushButton("Sync")
-    self.syncButton.connect('clicked()', self.syncLandmarks)
-    actionButtons.addWidget(self.syncButton)
     self.addButton = qt.QPushButton("Add")
     self.addButton.connect('clicked()', self.addLandmark)
     actionButtons.addWidget(self.addButton)
@@ -723,9 +725,9 @@ class LandmarksWidget(pqWidget):
     self.renameButton.enabled = False
     actionButtons.addWidget(self.renameButton)
     self.landmarkGroupBox.layout().addRow(actionButtons)
-    self.buttons = {}
 
     # make a button for each current landmark
+    self.buttons = {}
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
     keys = landmarks.keys()
     keys.sort()
@@ -737,28 +739,35 @@ class LandmarksWidget(pqWidget):
     self.landmarkArrayHolder.layout().addWidget(self.landmarkGroupBox)
 
     # observe manipulation of the landmarks
-    self.addLandmarkObservers(self.volumeNodes)
+    self.addLandmarkObservers()
 
-  def addLandmarkObservers(self,volumeNodes):
-    """Add observers to all fiducials associated as
-    landmarks for the given volumes"""
+  def addLandmarkObservers(self):
+    """Add observers to all fiducialLists in scene
+    so we will know when new markups are added
+    """
     self.removeLandmarkObservers()
-    landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
-    for landmarkName in landmarks:
-      fiducialList = landmarks[landmarkName]
-      for fiducial in fiducialList:
-        tag = fiducial.AddObserver(
-                fiducial.ControlPointModifiedEvent, lambda c,e: self.onFiducialMoved(c))
-        self.observerTags.append( (fiducial,tag) )
+    for fiducialList in slicer.util.getNodes('vtkMRMLMarkupsFiducialNode*').values():
+      tag = fiducialList.AddObserver(
+              fiducialList.PointModifiedEvent, lambda caller,event: self.onFiducialMoved(caller))
+      self.observerTags.append( (fiducialList,tag) )
+      tag = fiducialList.AddObserver(
+              fiducialList.MarkupAddedEvent, self.requestNodeAddedUpdate)
+      self.observerTags.append( (fiducialList,tag) )
+      tag = fiducialList.AddObserver(
+              fiducialList.MarkupRemovedEvent, self.requestNodeAddedUpdate)
+      self.observerTags.append( (fiducialList,tag) )
 
-  def onFiducialMoved(self,fiducial):
-    """Callback when fiducial's point has been changed.
-    Check the Annotation.State attribute to see if it is being
+  def onFiducialMoved(self,fiducialList):
+    """Callback when fiducialList's point has been changed.
+    Check the Markups.State attribute to see if it is being
     actively moved and if so, skip the picked method."""
-    self.movingView = fiducial.GetAttribute('Annotations.MovingInSliceView')
-    landmarkName = fiducial.GetName()
-    self.pickLandmark(landmarkName)
-    self.emit("landmarkMoved(landmarkName)", (landmarkName,))
+    self.movingView = fiducialList.GetAttribute('Markups.MovingInSliceView')
+    movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
+    if self.movingView and movingIndexAttribute:
+      movingIndex = int(movingIndexAttribute)
+      landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+      self.pickLandmark(landmarkName)
+      self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""
@@ -771,17 +780,14 @@ class LandmarksWidget(pqWidget):
     a 'signal'"""
     for key in self.buttons.keys():
       self.buttons[key].text = key
-    self.buttons[landmarkName].text = '*' + landmarkName
+    try:
+      self.buttons[landmarkName].text = '*' + landmarkName
+    except KeyError:
+      pass
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
     self.removeButton.enabled = True
     self.emit("landmarkPicked(landmarkName)", (landmarkName,))
-
-  def syncLandmarks(self):
-    """Make sure all volumes have a corresponding fiducials.
-    """
-    self.logic.syncLandmarks(self.volumeNodes)
-    self.updateLandmarkArray()
 
   def addLandmark(self):
     """Add a new landmark by adding correspondingly named
@@ -814,18 +820,38 @@ class LandmarksWidget(pqWidget):
     """Start a SingleShot timer that will check the fiducials
     in the scene and turn them into landmarks if needed"""
     if not self.pendingUpdate:
-      qt.QTimer.singleShot(0, self.nodeAddedUpdate)
+      qt.QTimer.singleShot(0, self.wrappedNodeAddedUpdate)
       self.pendingUpdate = True
 
+  def wrappedNodeAddedUpdate(self):
+    try:
+      self.nodeAddedUpdate()
+    except Exception, e:
+      import traceback
+      traceback.print_exc()
+      qt.QMessageBox.warning(slicer.util.mainWindow(),
+          "Node Added", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
+
   def nodeAddedUpdate(self):
-    """Perform the update of any new fiducials"""
+    """Perform the update of any new fiducials.
+    First collect from any fiducial lists not associated with one of our
+    lists (like when the process first gets started) and then check for
+    new fiducials added to one of our lists.
+    End result should be one fiducial per list with identical names and 
+    correctly assigned associated node ids.
+    Most recently created new fiducial is picked as active landmark.
+    """
     if self.updatingFiducials:
       return
     self.updatingFiducials = True
-    newLandmarkNames = self.logic.landmarksFromFiducials(self.volumeNodes)
-    if len(newLandmarkNames) > 0:
-      self.syncLandmarks()
-      self.pickLandmark(newLandmarkNames[-1])
+    addedAssociatedLandmark = self.logic.collectAssociatedFiducials(self.volumeNodes)
+    addedLandmark = self.logic.landmarksFromFiducials(self.volumeNodes)
+    if not addedLandmark:
+      addedLandmark = addedAssociatedLandmark
+    if addedLandmark:
+      self.pickLandmark(addedLandmark)
+    self.addLandmarkObservers()
+    self.updateLandmarkArray()
     self.pendingUpdate = False
     self.updatingFiducials = False
 
@@ -839,6 +865,28 @@ class LandmarkRegistrationLogic:
   should be such that other python code can import
   this class and make use of the functionality without
   requiring an instance of the Widget
+
+  The representation of Landmarks is in terms of matching FiducialLists
+  with one list per VolumeNode.
+
+  volume1 <-- associated node -- FiducialList1
+                                 - anatomy 1
+                                 - anatomy 2
+                                 ...
+  volume2 <-- associated node -- FiducialList2
+                                 - anatomy 1
+                                 - anatomy 2
+                                 ...
+
+  The Fiducial List is only made visible in the viewer that
+  has the associated node in the bg.
+
+  Set of identically named fiducials in lists associated with the
+  current moving and fixed volumes define a 'landmark'.
+
+  Note that it is the name, not the index, of the anatomy that defines
+  membership in a landmark.  Use a pair (fiducialListNodes,index) to
+  identify a fiducial.
   """
   def __init__(self):
     self.linearMode = 'Rigid'
@@ -846,46 +894,55 @@ class LandmarkRegistrationLogic:
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
-    volume node"""
+    volume node.  Creates a new list if needed.
+    If list already has a fiducial with the given name, then
+    set the position to the passed value.
+    """
 
-    annoLogic = slicer.modules.annotations.logic()
-    originalActiveHierarchy = annoLogic.GetActiveHierarchyNodeID()
+    markupsLogic = slicer.modules.markups.logic()
+    originalActiveListID = markupsLogic.GetActiveListID() # TODO: naming convention?
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
 
     # make the fiducial list if required
     listName = associatedNode.GetName() + "-landmarks"
-    fidListHierarchyNode = slicer.util.getNode(listName)
-    if not fidListHierarchyNode:
-      fidListHierarchyNode = slicer.vtkMRMLAnnotationHierarchyNode()
-      fidListHierarchyNode.HideFromEditorsOff()
-      fidListHierarchyNode.SetName(listName)
-      slicer.mrmlScene.AddNode(fidListHierarchyNode)
-      # make it a child of the top level node
-      fidListHierarchyNode.SetParentNodeID(annoLogic.GetTopLevelHierarchyNodeID())
+    fiducialList = slicer.util.getNode(listName)
+    if not fiducialList:
+      fiducialListNodeID = markupsLogic.AddNewFiducialNode(listName,slicer.mrmlScene)
+      fiducialList = slicer.util.getNode(fiducialListNodeID)
+      if associatedNode:
+        fiducialList.SetAttribute("AssociatedNodeID", associatedNode.GetID())
+      displayNode = fiducialList.GetDisplayNode()
+      # TODO: pick appropriate defaults
+      # 135,135,84
+      displayNode.SetTextScale(6.)
+      displayNode.SetGlyphScale(6.)
+      displayNode.SetGlyphTypeFromString('StarBurst2D')
+      displayNode.SetColor((1,1,0))
+      #displayNode.GetAnnotationTextDisplayNode().SetColor((1,1,0))
+      displayNode.SetVisibility(True)
+
     # make this active so that the fids will be added to it
-    annoLogic.SetActiveHierarchyNodeID(fidListHierarchyNode.GetID())
+    markupsLogic.SetActiveListID(fiducialList)
 
-    fiducialNode = slicer.vtkMRMLAnnotationFiducialNode()
-    if associatedNode:
-      fiducialNode.SetAttribute("AssociatedNodeID", associatedNode.GetID())
-    fiducialNode.SetName(name)
-    fiducialNode.AddControlPoint(position, True, True)
-    fiducialNode.SetSelected(False)
-    fiducialNode.SetLocked(False)
-    slicer.mrmlScene.AddNode(fiducialNode)
+    foundLandmarkFiducial = False
+    fiducialSize = fiducialList.GetNumberOfFiducials()
+    for fiducialIndex in range(fiducialSize):
+      if fiducialList.GetNthFiducialLabel(fiducialIndex) == name:
+        fiducialList.SetNthFiducialPosition(fiducialIndex, *position)
+        foundLandmarkFiducial = True
+        break
 
-    fiducialNode.CreateAnnotationTextDisplayNode()
-    fiducialNode.CreateAnnotationPointDisplayNode()
-    # TODO: pick appropriate defaults
-    # 135,135,84
-    fiducialNode.SetTextScale(3.)
-    fiducialNode.GetAnnotationPointDisplayNode().SetGlyphScale(3.)
-    fiducialNode.GetAnnotationPointDisplayNode().SetGlyphTypeFromString('StarBurst2D')
-    fiducialNode.GetAnnotationPointDisplayNode().SetColor((1,1,0))
-    fiducialNode.GetAnnotationTextDisplayNode().SetColor((1,1,0))
-    fiducialNode.SetDisplayVisibility(True)
+    if not foundLandmarkFiducial:
+      fiducialList.AddFiducial(*position)
+      fiducialIndex = fiducialList.GetNumberOfFiducials()-1
 
-    annoLogic.SetActiveHierarchyNodeID(originalActiveHierarchy)
+    fiducialList.SetNthFiducialLabel(fiducialIndex, name)
+    fiducialList.SetNthFiducialSelected(fiducialIndex, False)
+    fiducialList.SetNthMarkupLocked(fiducialIndex, False)
+
+    originalActiveList = slicer.util.getNode(originalActiveListID)
+    if originalActiveList:
+      markupsLogic.SetActiveListID(originalActiveList)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
 
@@ -907,7 +964,7 @@ class LandmarkRegistrationLogic:
 
   def removeLandmarkForVolumes(self,landmark,volumeNodes):
     """Remove the fiducial nodes from all the volumes.
-    TODO: remove lingering hierarchy nodes"""
+    """
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     landmarks = self.landmarksForVolumes(volumeNodes)
     if landmarks.has_key(landmark):
@@ -915,116 +972,117 @@ class LandmarkRegistrationLogic:
         slicer.mrmlScene.RemoveNode(fid)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
-  def volumeFiducialsByName(self,volumeNode):
-    """return a dictionary of annotation nodes that are
-    children of the list associated with the given
-    volume node, where the keys are fiducial names
-    and the values are fiducial nodes"""
-    fiducialsByName = {}
+  def volumeFiducialList(self,volumeNode):
+    """return fiducial list node that is
+    list associated with the given volume node"""
     listName = volumeNode.GetName() + "-landmarks"
-    fidListHierarchyNode = slicer.util.getNode(listName)
-    if fidListHierarchyNode:
-      childCollection = vtk.vtkCollection()
-      fidListHierarchyNode.GetAllChildren(childCollection)
-      for childIndex in range(childCollection.GetNumberOfItems()):
-        fiducialNode = childCollection.GetItemAsObject(childIndex)
-        fiducialsByName[fiducialNode.GetName()] = fiducialNode
-    return fiducialsByName
-
-  def volumeFiducialsAsList(self,volumeNode):
-    """return a list of annotation nodes that are
-    children of the list associated with the given
-    volume node"""
-    children = []
-    listName = volumeNode.GetName() + "-landmarks"
-    fidListHierarchyNode = slicer.util.getNode(listName)
-    if fidListHierarchyNode:
-      childCollection = vtk.vtkCollection()
-      fidListHierarchyNode.GetAllChildren(childCollection)
-      for childIndex in range(childCollection.GetNumberOfItems()):
-        children.append(childCollection.GetItemAsObject(childIndex))
-    return children
+    return slicer.util.getNode(listName)
 
   def landmarksForVolumes(self,volumeNodes):
-    """Return a dictionary of fiducial node lists, where each element
-    is a list of the ids of fiducials with matching names in
-    the landmark lists for each of the given volumes.
+    """Return a dictionary of keyed by
+    landmark name containing pairs (fiducialListNodes,index)
     Only fiducials that exist for all volumes are returned."""
-    fiducialsByName = {}
+    landmarksByName = {}
     for volumeNode in volumeNodes:
-      children = self.volumeFiducialsAsList(volumeNode)
-      for child in children:
-        if fiducialsByName.has_key(child.GetName()):
-          fiducialsByName[child.GetName()].append(child)
-        else:
-          fiducialsByName[child.GetName()] = [child,]
-    for childName in fiducialsByName.keys():
-      if len(fiducialsByName[childName]) != len(volumeNodes):
-        fiducialsByName.__delitem__(childName)
-    return fiducialsByName
+      listForVolume = self.volumeFiducialList(volumeNode)
+      if listForVolume:
+        fiducialSize = listForVolume.GetNumberOfMarkups()
+        for fiducialIndex in range(fiducialSize):
+          fiducialName = listForVolume.GetNthFiducialLabel(fiducialIndex)
+          if landmarksByName.has_key(fiducialName):
+            landmarksByName[fiducialName].append((listForVolume,fiducialIndex))
+          else:
+            landmarksByName[fiducialName] = [(listForVolume,fiducialIndex),]
+    for fiducialName in landmarksByName.keys():
+      if len(landmarksByName[fiducialName]) != len(volumeNodes):
+        landmarksByName.__delitem__(fiducialName)
+    return landmarksByName
+
+  def ensureFiducialInListForVolume(self,volumeNode,landmarkName,landmarkPosition):
+    """Make sure the fiducial list associated with the given
+    volume node contains a fiducial named landmarkName and that it
+    is associated with volumeNode.  If it does not have one, add one
+    and put it at landmarkPosition."""
+    fiducialList = self.volumeFiducialList(volumeNode)
+    fiducialSize = fiducialList.GetNumberOfMarkups()
+    for fiducialIndex in range(fiducialSize):
+      if fiducialList.GetNthFiducialLabel(fiducialIndex) == landmarkName:
+        fiducialList.SetNthMarkupAssociatedNodeID(fiducialIndex, volumeNode.GetID())
+        return None
+    # if we got here, then there is no fiducial with this name so add one
+    fiducialList.AddFiducial(*landmarkPosition)
+    fiducialIndex = fiducialList.GetNumberOfFiducials()-1
+    fiducialList.SetNthFiducialLabel(fiducialIndex, landmarkName)
+    fiducialList.SetNthFiducialSelected(fiducialIndex, False)
+    fiducialList.SetNthMarkupLocked(fiducialIndex, False)
+    return landmarkName
+
+  def collectAssociatedFiducials(self,volumeNodes):
+    """Look at each fiducial list in scene and find any fiducials associated
+    with one of our volumes but not in in one of our lists.
+    Add the fiducial as a landmark and delete it from the other list.
+    Return the name of the last added landmark if it exists.
+    """
+    addedLandmark = None
+    volumeNodeIDs = []
+    for volumeNode in volumeNodes:
+      volumeNodeIDs.append(volumeNode.GetID())
+    landmarksByName = self.landmarksForVolumes(volumeNodes)
+    fiducialListsInScene = slicer.util.getNodes('vtkMRMLMarkupsFiducialNode*')
+    landmarkFiducialLists = []
+    for landmarkName in landmarksByName.keys():
+      for fiducialList,index in landmarksByName[landmarkName]:
+        if fiducialList not in landmarkFiducialLists:
+          landmarkFiducialLists.append(fiducialList)
+    listIndexToRemove = [] # remove back to front after identifying them
+    for fiducialList in fiducialListsInScene.values():
+      if fiducialList not in landmarkFiducialLists:
+        # this is not one of our fiducial lists, so look for fiducials
+        # associated with one of our volumes
+        fiducialSize = fiducialList.GetNumberOfMarkups()
+        for fiducialIndex in range(fiducialSize):
+          associated = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
+          if fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex) in volumeNodeIDs:
+            # found one, so add it as a landmark
+            landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
+            addedLandmark = self.addLandmark(volumeNodes,landmarkPosition)
+            listIndexToRemove.insert(0,(fiducialList,fiducialIndex))
+    for fiducialList,fiducialIndex in listIndexToRemove:
+      fiducialList.RemoveMarkup(fiducialIndex)
+    return addedLandmark
 
   def landmarksFromFiducials(self,volumeNodes):
-    """Look through all fiducials in the scene and on finding
-    ones that are associated with one of the volumeNodes,
-    re-make the fiducial as a child of the volume node's
-    named hieararchy.  This can be used when responding to
-    new fiducials added to the scene."""
-    # first, get all the fiducials *before* any new ones are added
-    # since we will be adding fiducials inside the loop
-    fiducialsByVolume = {}
-    for volumeNode in volumeNodes:
-      fiducialsByVolume[volumeNode] = self.volumeFiducialsAsList(volumeNode)
-    fiducialNodes = slicer.util.getNodes('vtkMRMLAnnotationFiducialNode*')
-    # now create new landmarks for any fiducials that are not yet landmarks
-    newLandmarkNames = []
-    for volumeNode in volumeNodes:
-      volumeFiducials = fiducialsByVolume[volumeNode]
-      for fiducialNode in fiducialNodes.values():
-        fiducialVolumeID = fiducialNode.GetAttribute('AssociatedNodeID')
-        if fiducialVolumeID == volumeNode.GetID() and fiducialNode not in volumeFiducials:
-          # we found a fiducial for this volume that is not yet in our hierarchy
-          # so we make a copy in the right spot with the right properies and delete it
-          position = [0,]*3
-          fiducialNode.GetFiducialCoordinates(position)
-          newLandmarkName = self.addLandmark(volumeNodes=volumeNodes,position=position)
-          if newLandmarkName not in newLandmarkNames:
-            newLandmarkNames.append(newLandmarkName)
-          slicer.mrmlScene.RemoveNode(fiducialNode)
-    return newLandmarkNames
-
-  def syncLandmarks(self,volumeNodes):
-    """Ensure that all volume nodes have a complete set
-    of matching landmarks - that is, make a set of landmarks
-    that is the union of all unique fiducial names for all volumes
-    and then make sure that each volume node has one
-    of each of those fiducials.  Map these through the
-    transform if needed.
+    """Look through all fiducials in the scene and make sure they
+    are in a fiducial list that is associated with the same
+    volume node.  If they are in the wrong list fix the node id, and make a new
+    duplicate fiducial in the correct list.
+    This can be used when responding to new fiducials added to the scene.
+    Returns the most recently added landmark (or None).
     """
-    # build the union of all names as a map
-    # of fiducial names to a fiducial with that name
-    allNamedFiducials = {}
+    addedLandmark = None
     for volumeNode in volumeNodes:
-      children = self.volumeFiducialsAsList(volumeNode)
-      for child in children:
-        if not allNamedFiducials.has_key(child.GetName()):
-          allNamedFiducials[child.GetName()] = child
-    # now add the missing ones
-    for volumeNode in volumeNodes:
-      for fiducialName in allNamedFiducials:
-        fiducialsByName = self.volumeFiducialsByName(volumeNode)
-        if not fiducialsByName.has_key(fiducialName):
-          point = [0,]*3
-          allNamedFiducials[fiducialName].GetFiducialCoordinates(point)
-          self.addFiducial(fiducialName, position=point,associatedNode=volumeNode)
-    # now make the flagged ones invisible
-    for volumeNode in self.hiddenFiducialVolumes:
-      children = self.volumeFiducialsAsList(volumeNode)
-      for fiducialNode in children:
-        fiducialNode.SetDisplayVisibility(False)
-
+      fiducialList = self.volumeFiducialList(volumeNode)
+      if not fiducialList:
+        print("no fiducialList for volume %s" % volumeNode.GetName())
+        continue
+      fiducialSize = fiducialList.GetNumberOfMarkups()
+      for fiducialIndex in range(fiducialSize):
+        fiducialAssociatedVolumeID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
+        landmarkName = fiducialList.GetNthFiducialLabel(fiducialIndex)
+        landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
+        if fiducialAssociatedVolumeID != volumeNode.GetID():
+          # fiducial was placed on a viewer associated with the non-active list, so change it
+          fiducialList.SetNthMarkupAssociatedNodeID(fiducialIndex,volumeNode.GetID())
+        # now make sure all other lists have a corresponding fiducial (same name)
+        for otherVolumeNode in volumeNodes:
+          if otherVolumeNode != volumeNode:
+            addedFiducial = self.ensureFiducialInListForVolume(otherVolumeNode,landmarkName,landmarkPosition)
+            if addedFiducial:
+              addedLandmark = addedFiducial
+    return addedLandmark
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
-    print("enable")
+    print("enableLinearRegistration")
     self.performLinearRegistration(fixed,moving,landmarks,transform,transformed)
     # TODO: set up observers on fixed and moving fiducial
     pass
@@ -1032,7 +1090,6 @@ class LandmarkRegistrationLogic:
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     """Perform the linear transform using the vtkLandmarkTransform class"""
 
-    print('performing registration')
     transformed.SetAndObserveTransformNodeID(transform.GetID())
 
     # try to use user selection, but fall back if not enough points are available
@@ -1052,16 +1109,16 @@ class LandmarkRegistrationLogic:
       points[volumeNode] = vtk.vtkPoints()
     for fiducials in landmarks.values():
       for volumeNode,fid in zip((fixed,moving),fiducials):
-        fid.GetFiducialCoordinates(point)
+        fiducialList,index = fid
+        fiducialList.GetNthFiducialPosition(index,point)
         points[volumeNode].InsertNextPoint(point)
-        print("%s: %s" % (volumeNode.GetName(), str(point)))
     landmarkTransform.SetSourceLandmarks(points[moving])
     landmarkTransform.SetTargetLandmarks(points[fixed])
     landmarkTransform.Update()
     transform.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
 
   def disableLinearRegistration(self):
-    print("disable")
+    print("disableLinearRegistration")
     pass
 
   def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
@@ -1117,7 +1174,6 @@ class LandmarkRegistrationLogic:
       for volumeNode,fid in zip((fixed,moving),landmarks[fiducialName]):
         fid.GetFiducialCoordinates(point)
         points[volumeNode].InsertNextPoint(point)
-        print("%s: ('%s', %s)" % (volumeNode.GetName(), fiducialName, str(point)))
     # since this is a resample transform, source is the fixed (resampling target) space
     # and moving is the target space
     self.thinPlateTransform.SetSourceLandmarks(points[fixed])
@@ -1272,7 +1328,6 @@ class LandmarkRegistrationTest(unittest.TestCase):
         w.logic.addFiducial(name, position=point,associatedNode=pre)
 
 
-    w.landmarksWidget.syncLandmarks()
     w.landmarksWidget.pickLandmark('L-4')
     w.linearRegistrationActive.checked = False
     w.onRegistrationType("Thin Plate")
