@@ -847,7 +847,7 @@ class LandmarksWidget(pqWidget):
     if self.movingView and movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
       landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
-      self.pickLandmark(landmarkName)
+      self.pickLandmark(landmarkName,clearMovingView=False)
       self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
   def removeLandmarkObservers(self):
@@ -856,7 +856,7 @@ class LandmarksWidget(pqWidget):
       obj.RemoveObserver(tag)
     self.observerTags = []
 
-  def pickLandmark(self,landmarkName):
+  def pickLandmark(self,landmarkName,clearMovingView=True):
     """Hightlight the named landmark button and emit
     a 'signal'"""
     for key in self.buttons.keys():
@@ -868,6 +868,8 @@ class LandmarksWidget(pqWidget):
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
     self.removeButton.enabled = True
+    if clearMovingView:
+      self.movingView = None
     self.emit("landmarkPicked(landmarkName)", (landmarkName,))
 
   def addLandmark(self):
