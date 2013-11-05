@@ -52,6 +52,7 @@ class LandmarkRegistrationWidget:
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
     self.viewNames = ("Fixed", "Moving", "Transformed")
+    self.volumeSelectDialog = None
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -67,45 +68,20 @@ class LandmarkRegistrationWidget:
   def setup(self):
     """Instantiate and connect widgets ..."""
 
-    #
-    # Reload and Test area
-    #
-    reloadCollapsibleButton = ctk.ctkCollapsibleButton()
-    reloadCollapsibleButton.text = "Reload && Test"
-    self.layout.addWidget(reloadCollapsibleButton)
-    reloadFormLayout = qt.QFormLayout(reloadCollapsibleButton)
+    self.selectVolumesButton = qt.QPushButton("Select Volumes To Register")
+    self.selectVolumesButton.connect('clicked(bool)', self.enter)
+    self.layout.addWidget(self.selectVolumesButton)
 
-    # reload button
-    # (use this during development, but remove it when delivering
-    #  your module to users)
-    self.reloadButton = qt.QPushButton("Reload")
-    self.reloadButton.toolTip = "Reload this module."
-    self.reloadButton.name = "LandmarkRegistration Reload"
-    reloadFormLayout.addWidget(self.reloadButton)
-    self.reloadButton.connect('clicked()', self.onReload)
-
-    # reload and test button
-    # (use this during development, but remove it when delivering
-    #  your module to users)
-    self.reloadAndTestButton = qt.QPushButton("Reload and Test")
-    self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
-    reloadFormLayout.addWidget(self.reloadAndTestButton)
-    self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
-
-    # reload and run specific tests
-    scenarios = ("Basic", "Linear", "Thin Plate")
-    for scenario in scenarios:
-      button = qt.QPushButton("Reload and Test %s" % scenario)
-      self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
-      reloadFormLayout.addWidget(button)
-      button.connect('clicked()', lambda s=scenario: self.onReloadAndTest(scenario=s))
+    self.interfaceFrame = qt.QWidget(self.parent)
+    self.interfaceFrame.setLayout(qt.QVBoxLayout())
+    self.layout.addWidget(self.interfaceFrame)
 
     #
     # Parameters Area
     #
     parametersCollapsibleButton = ctk.ctkCollapsibleButton()
     parametersCollapsibleButton.text = "Parameters"
-    self.layout.addWidget(parametersCollapsibleButton)
+    self.interfaceFrame.layout().addWidget(parametersCollapsibleButton)
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
     self.volumeSelectors = {}
@@ -120,6 +96,7 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors[viewName].showChildNodeTypes = True
       self.volumeSelectors[viewName].setMRMLScene( slicer.mrmlScene )
       self.volumeSelectors[viewName].setToolTip( "Pick the %s volume." % viewName.lower() )
+      self.volumeSelectors[viewName].enabled = False
       parametersFormLayout.addRow("%s Volume " % viewName, self.volumeSelectors[viewName])
 
     self.volumeSelectors["Transformed"].addEnabled = True
@@ -148,7 +125,7 @@ class LandmarkRegistrationWidget:
     #
     registrationCollapsibleButton = ctk.ctkCollapsibleButton()
     registrationCollapsibleButton.text = "Registration"
-    self.layout.addWidget(registrationCollapsibleButton)
+    self.interfaceFrame.layout().addWidget(registrationCollapsibleButton)
     registrationFormLayout = qt.QFormLayout(registrationCollapsibleButton)
 
     #
@@ -159,6 +136,7 @@ class LandmarkRegistrationWidget:
     self.registrationTypeBox.setLayout(qt.QFormLayout())
     self.registrationTypeButtons = {}
     self.registrationTypes = ("Linear", "Thin Plate", "Hybrid B-Spline")
+    self.enabledRegistrationTypes = ("Linear",)
     for registrationType in self.registrationTypes:
       self.registrationTypeButtons[registrationType] = qt.QRadioButton()
       self.registrationTypeButtons[registrationType].text = registrationType
@@ -166,6 +144,11 @@ class LandmarkRegistrationWidget:
       self.registrationTypeButtons[registrationType].connect("clicked()",
                                       lambda t=registrationType: self.onRegistrationType(t))
       self.registrationTypeBox.layout().addWidget(self.registrationTypeButtons[registrationType])
+      if registrationType not in self.enabledRegistrationTypes:
+        self.registrationTypeButtons[registrationType].enabled = False
+    if len(self.enabledRegistrationTypes) <= 1:
+      self.registrationTypeBox.hide()
+
     registrationFormLayout.addWidget(self.registrationTypeBox)
 
     #
@@ -180,7 +163,7 @@ class LandmarkRegistrationWidget:
     registrationFormLayout.addWidget(self.linearCollapsibleButton)
 
     self.linearRegistrationActive = qt.QCheckBox()
-    self.linearRegistrationActive.checked = False
+    self.linearRegistrationActive.checked = True
     self.linearRegistrationActive.connect("toggled(bool)", self.onLinearActive)
     linearFormLayout.addRow("Registration Active: ", self.linearRegistrationActive)
 
@@ -258,15 +241,41 @@ class LandmarkRegistrationWidget:
       self.registrationTypeInterfaces[registrationType].hide()
 
     #
-    # Apply Button
+    # Reload and Test area
     #
-    self.applyButton = qt.QPushButton("Run Registration")
-    self.applyButton.toolTip = "Run the registration algorithm."
-    self.applyButton.enabled = False
-    parametersFormLayout.addRow(self.applyButton)
+    reloadCollapsibleButton = ctk.ctkCollapsibleButton()
+    reloadCollapsibleButton.text = "Advanced - Reload && Test"
+    reloadCollapsibleButton.collapsed = True
+    self.interfaceFrame.layout().addWidget(reloadCollapsibleButton)
+    reloadFormLayout = qt.QFormLayout(reloadCollapsibleButton)
+
+    # reload button
+    # (use this during development, but remove it when delivering
+    #  your module to users)
+    self.reloadButton = qt.QPushButton("Reload")
+    self.reloadButton.toolTip = "Reload this module."
+    self.reloadButton.name = "LandmarkRegistration Reload"
+    reloadFormLayout.addWidget(self.reloadButton)
+    self.reloadButton.connect('clicked()', self.onReload)
+
+    # reload and test button
+    # (use this during development, but remove it when delivering
+    #  your module to users)
+    self.reloadAndTestButton = qt.QPushButton("Reload and Test")
+    self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
+    reloadFormLayout.addWidget(self.reloadAndTestButton)
+    self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
+
+    # reload and run specific tests
+    scenarios = ("Basic", "Linear", "Thin Plate")
+    for scenario in scenarios:
+      button = qt.QPushButton("Reload and Test %s" % scenario)
+      self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
+      reloadFormLayout.addWidget(button)
+      button.connect('clicked()', lambda s=scenario: self.onReloadAndTest(scenario=s))
+
 
     # connections
-    self.applyButton.connect('clicked(bool)', self.onApplyButton)
     for selector in self.volumeSelectors.values():
       selector.connect("currentNodeChanged(vtkMRMLNode*)", self.onVolumeNodeSelect)
 
@@ -275,6 +284,75 @@ class LandmarkRegistrationWidget:
 
     # Add vertical spacer
     self.layout.addStretch(1)
+
+  def enter(self):
+    self.interfaceFrame.enabled = False
+    self.setupDialog()
+
+  def setupDialog(self):
+    """setup dialog"""
+
+    if not self.volumeSelectDialog:
+      self.volumeSelectDialog = qt.QDialog(slicer.util.mainWindow())
+      self.volumeSelectDialog.objectName = 'LandmarkRegistrationVolumeSelect'
+      self.volumeSelectDialog.setLayout( qt.QVBoxLayout() )
+
+      self.volumeSelectLabel = qt.QLabel()
+      self.volumeSelectDialog.layout().addWidget( self.volumeSelectLabel )
+
+      self.volumeSelectorFrame = qt.QFrame()
+      self.volumeSelectorFrame.objectName = 'VolumeSelectorFrame'
+      self.volumeSelectorFrame.setLayout( qt.QFormLayout() )
+      self.volumeSelectDialog.layout().addWidget( self.volumeSelectorFrame )
+
+      self.volumeDialogSelectors = {}
+      for viewName in ('Fixed', 'Moving',):
+        self.volumeDialogSelectors[viewName] = slicer.qMRMLNodeComboBox()
+        self.volumeDialogSelectors[viewName].nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
+        self.volumeDialogSelectors[viewName].selectNodeUponCreation = False
+        self.volumeDialogSelectors[viewName].addEnabled = False
+        self.volumeDialogSelectors[viewName].removeEnabled = True
+        self.volumeDialogSelectors[viewName].noneEnabled = True
+        self.volumeDialogSelectors[viewName].showHidden = False
+        self.volumeDialogSelectors[viewName].showChildNodeTypes = True
+        self.volumeDialogSelectors[viewName].setMRMLScene( slicer.mrmlScene )
+        self.volumeDialogSelectors[viewName].setToolTip( "Pick the %s volume." % viewName.lower() )
+        self.volumeSelectorFrame.layout().addRow("%s Volume " % viewName, self.volumeDialogSelectors[viewName])
+
+      self.volumeButtonFrame = qt.QFrame()
+      self.volumeButtonFrame.objectName = 'VolumeButtonFrame'
+      self.volumeButtonFrame.setLayout( qt.QHBoxLayout() )
+      self.volumeSelectDialog.layout().addWidget( self.volumeButtonFrame )
+
+      self.volumeDialogApply = qt.QPushButton("Apply", self.volumeButtonFrame)
+      self.volumeDialogApply.objectName = 'VolumeDialogApply'
+      self.volumeDialogApply.setToolTip( "Use currently selected volume nodes." )
+      self.volumeButtonFrame.layout().addWidget(self.volumeDialogApply)
+
+      self.volumeDialogCancel = qt.QPushButton("Cancel", self.volumeButtonFrame)
+      self.volumeDialogCancel.objectName = 'VolumeDialogCancel'
+      self.volumeDialogCancel.setToolTip( "Cancel current operation." )
+      self.volumeButtonFrame.layout().addWidget(self.volumeDialogCancel)
+
+      self.volumeDialogApply.connect("clicked()", self.onVolumeDialogApply)
+      self.volumeDialogCancel.connect("clicked()", self.volumeSelectDialog.hide)
+
+    self.volumeSelectLabel.setText( "Pick the volumes to use for landmark-based linear registration" )
+    self.volumeSelectDialog.show()
+
+  # volumeSelectDialog callback (slot)
+  def onVolumeDialogApply(self):
+    self.volumeSelectDialog.hide()
+    fixedID = self.volumeDialogSelectors['Fixed'].currentNodeID
+    movingID = self.volumeDialogSelectors['Moving'].currentNodeID
+    if fixedID and movingID:
+      self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
+      self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
+      self.linearRegistrationActive.checked = True
+      self.onLinearActive(self.linearRegistrationActive.checked)
+      self.onLayout()
+
+    self.interfaceFrame.enabled = True
 
   def cleanup(self):
     self.removeObservers()
@@ -372,7 +450,7 @@ class LandmarkRegistrationWidget:
       fixed = self.volumeSelectors['Fixed'].currentNode()
       moving = self.volumeSelectors['Moving'].currentNode()
       if not (fixed and moving):
-        self.linearRegistrationActive.checked = False
+        return
       else:
         # create transform and transformed if needed
         transform = self.linearTransformSelector.currentNode()
@@ -383,7 +461,9 @@ class LandmarkRegistrationWidget:
         if not transformed:
           volumesLogic = slicer.modules.volumes.logic()
           transformedName = "%s-transformed" % moving.GetName()
-          transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+          transformed = slicer.util.getNode(transformedName)
+          if not transformed:
+            transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
           self.volumeSelectors['Transformed'].setCurrentNode(transformed)
         landmarks = self.logic.landmarksForVolumes((fixed,moving))
         self.logic.enableLinearRegistration(fixed,moving,landmarks,transform,transformed)
@@ -480,10 +560,6 @@ class LandmarkRegistrationWidget:
     if self.linearRegistrationActive.checked:
       self.onLinearActive(True)
 
-  def onApplyButton(self):
-    print("Run the algorithm")
-    #self.logic.run(self.fixedSelector.currentNode(), self.movingSelector.currentNode())
-
   def onReload(self,moduleName="LandmarkRegistration"):
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
@@ -507,7 +583,7 @@ class LandmarkRegistrationWidget:
     # rebuild the widget
     # - find and hide the existing widget
     # - create a new widget in the existing parent
-    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent().parent()
+    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent().parent().parent()
     for child in parent.children():
       try:
         child.hide()
@@ -726,6 +802,11 @@ class LandmarksWidget(pqWidget):
     actionButtons.addWidget(self.renameButton)
     self.landmarkGroupBox.layout().addRow(actionButtons)
 
+    # for now, hide these
+    #self.addButton.hide()
+    self.removeButton.hide()
+    self.renameButton.hide()
+
     # make a button for each current landmark
     self.buttons = {}
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
@@ -790,13 +871,16 @@ class LandmarksWidget(pqWidget):
     self.emit("landmarkPicked(landmarkName)", (landmarkName,))
 
   def addLandmark(self):
-    """Add a new landmark by adding correspondingly named
-    fiducials to all the current volume nodes.
-    Find a unique name for the landmark and place it at the origin.
+    """Enable markup place mode so fiducial can be added.
+    When the node is added it will be incorporated into the
+    registration system as a landmark.
     """
-    landmarkName = self.logic.addLandmark(self.volumeNodes)
-    self.updateLandmarkArray()
-    self.pickLandmark(landmarkName)
+    applicationLogic = slicer.app.applicationLogic()
+    selectionNode = applicationLogic.GetSelectionNode()
+
+    selectionNode.SetReferenceActivePlaceNodeClassName("vtkMRMLMarkupsFiducialNode")
+    interactionNode = applicationLogic.GetInteractionNode()
+    interactionNode.SwitchToSinglePlaceMode()
 
   def removeLandmark(self):
     self.logic.removeLandmarkForVolumes(self.selectedLandmark, self.volumeNodes)
@@ -810,8 +894,8 @@ class LandmarksWidget(pqWidget):
           slicer.util.mainWindow(), "Rename Landmark",
           "New name for landmark '%s'?" % self.selectedLandmark)
       if newName != "":
-        for fiducial in landmarks[self.selectedLandmark]:
-          fiducial.SetName(newName)
+        for fiducialList,index in landmarks[self.selectedLandmark]:
+          fiducialList.SetNthFiducialLabel(newName)
         self.selectedLandmark = newName
         self.updateLandmarkArray()
         self.pickLandmark(newName)
@@ -837,7 +921,7 @@ class LandmarksWidget(pqWidget):
     First collect from any fiducial lists not associated with one of our
     lists (like when the process first gets started) and then check for
     new fiducials added to one of our lists.
-    End result should be one fiducial per list with identical names and 
+    End result should be one fiducial per list with identical names and
     correctly assigned associated node ids.
     Most recently created new fiducial is picked as active landmark.
     """
@@ -968,8 +1052,8 @@ class LandmarkRegistrationLogic:
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     landmarks = self.landmarksForVolumes(volumeNodes)
     if landmarks.has_key(landmark):
-      for fid in landmarks[landmark]:
-        slicer.mrmlScene.RemoveNode(fid)
+      for fiducialList,fiducialIndex in landmarks[landmark]:
+        fiducialList.RemoveMarkup(fiducialIndex)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
   def volumeFiducialList(self,volumeNode):
@@ -1082,7 +1166,6 @@ class LandmarkRegistrationLogic:
     return addedLandmark
 
   def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
-    print("enableLinearRegistration")
     self.performLinearRegistration(fixed,moving,landmarks,transform,transformed)
     # TODO: set up observers on fixed and moving fiducial
     pass
