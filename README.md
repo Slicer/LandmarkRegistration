@@ -23,6 +23,12 @@ Linux:
  
 (on windows you run "Slicer.exe <args>" from a console.  On mac, you use "open Slicer.app <args>")
 
+Versions
+========
+
+As of Nov 5, 2013 the master has been converted to use Markups rather than Annotations, meaning that it works
+with Slicer 4.3.1 and later.  Older versions of Slicer are / will not be supported.
+
 Use
 ===
 
