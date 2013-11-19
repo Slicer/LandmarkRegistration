@@ -1175,7 +1175,8 @@ class LandmarkRegistrationLogic:
   def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
     """Perform the linear transform using the vtkLandmarkTransform class"""
 
-    transformed.SetAndObserveTransformNodeID(transform.GetID())
+    if transformed.GetTransformNodeID() != transform.GetID():
+      transformed.SetAndObserveTransformNodeID(transform.GetID())
 
     # try to use user selection, but fall back if not enough points are available
     landmarkTransform = vtk.vtkLandmarkTransform()
