@@ -264,8 +264,6 @@ class LandmarkRegistrationWidget:
     if fixedID and movingID:
       self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
-      self.linearRegistrationActive.checked = True
-      self.onLinearActive(self.linearRegistrationActive.checked)
       self.onLayout()
 
     self.interfaceFrame.enabled = True
@@ -479,13 +477,17 @@ class LandmarkRegistrationWidget:
   def onReload(self,moduleName="LandmarkRegistration"):
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
+    Note: customized for use in LandmarkRegistration
     """
     import imp, sys, os, slicer
 
     # reload all the support code and have the plugins
     # re-register themselves with slicer
+    oldPlugins = slicer.modules.registrationPlugins
     slicer.modules.registrationPlugins = {}
-    reload(RegistrationLib)
+    for plugin in oldPlugins.values():
+      imp.load_source(plugin.__module__, plugin.sourceFile.replace('.pyc', '.py'))
+    oldPlugins = None
 
     widgetName = moduleName + "Widget"
 

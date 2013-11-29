@@ -45,6 +45,9 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
   # - widget will be disabled until landmarks are defined
   landmarksNeededToEnable = 1
 
+  # used for reloading - every concrete class should include this
+  sourceFile = __file__
+
   def __init__(self,parent=None):
     super(AffinePlugin,self).__init__(parent)
 

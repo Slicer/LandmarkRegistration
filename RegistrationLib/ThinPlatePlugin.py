@@ -45,6 +45,9 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   # - widget will be disabled until landmarks are defined
   landmarksNeededToEnable = 1
 
+  # used for reloading - every concrete class should include this
+  sourceFile = __file__
+
   def __init__(self,parent=None):
     super(ThinPlatePlugin,self).__init__(parent)
 
@@ -83,4 +86,3 @@ try:
 except AttributeError:
   slicer.modules.registrationPlugins = {}
 slicer.modules.registrationPlugins['ThinPlate'] = ThinPlatePlugin
-

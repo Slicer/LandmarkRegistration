@@ -43,6 +43,9 @@ class RegistrationPlugin(object):
   # - widget will be disabled until landmarks are defined
   landmarksNeededToEnable = 1
 
+  # used for reloading - every concrete class should include this
+  sourceFile = __file__
+
   def __init__(self,parent=None):
 
     #
