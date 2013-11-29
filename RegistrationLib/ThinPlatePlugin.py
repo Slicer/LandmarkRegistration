@@ -53,7 +53,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
 
   def create(self):
     """Make the plugin-specific user interface"""
-    super(ThinPlatePlugin,self).create(parent)
+    super(ThinPlatePlugin,self).create()
     #
     # Thin Plate Spline Registration Pane
     #
@@ -61,7 +61,6 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     self.thinPlateCollapsibleButton.text = "Thin Plate Spline Registration"
     thinPlateFormLayout = qt.QFormLayout()
     self.thinPlateCollapsibleButton.setLayout(thinPlateFormLayout)
-    registrationFormLayout.addWidget(self.thinPlateCollapsibleButton)
     self.widgets.append(self.thinPlateCollapsibleButton)
 
     self.thinPlateApply = qt.QPushButton("Apply")
@@ -69,14 +68,19 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     thinPlateFormLayout.addWidget(self.thinPlateApply)
     self.widgets.append(self.thinPlateApply)
 
+    self.parent.layout().addWidget(self.thinPlateCollapsibleButton)
+
 
   def destroy(self):
     """Clean up"""
-    super(ThinPlatePlugin,self).destroy(parent)
+    super(ThinPlatePlugin,self).destroy()
 
   def onLandmarkMoved(self):
     """Called when the user changes a landmark"""
     pass
+
+  def onThinPlateApply(self):
+    print('applying')
 
 # Add this plugin to the dictionary of available registrations.
 # Since this module may be discovered before the Editor itself,

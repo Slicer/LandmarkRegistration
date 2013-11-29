@@ -53,7 +53,7 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
 
   def create(self):
     """Make the plugin-specific user interface"""
-    super(AffinePlugin,self).create(parent)
+    super(AffinePlugin,self).create()
     #
     # Linear Registration Pane - initially hidden
     # - interface options for linear registration
@@ -63,7 +63,6 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     self.linearCollapsibleButton.text = "Linear Registration"
     linearFormLayout = qt.QFormLayout()
     self.linearCollapsibleButton.setLayout(linearFormLayout)
-    registrationFormLayout.addWidget(self.linearCollapsibleButton)
     self.widgets.append(self.linearCollapsibleButton)
 
     self.linearRegistrationActive = qt.QCheckBox()
@@ -98,13 +97,21 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
       self.linearTransformSelector.setToolTip( "Pick the transform for linear registration" )
       linearFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
 
+    self.parent.layout().addWidget(self.linearCollapsibleButton)
+
 
   def destroy(self):
     """Clean up"""
-    super(AffinePlugin,self).destroy(parent)
+    super(AffinePlugin,self).destroy()
 
   def onLandmarkMoved(self):
     """Called when the user changes a landmark"""
+    pass
+
+  def onLinearActive(self):
+    pass
+
+  def onLinearTransform(self):
     pass
 
 # Add this plugin to the dictionary of available registrations.

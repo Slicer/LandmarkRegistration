@@ -55,6 +55,7 @@ class LandmarkRegistrationWidget:
     self.observerTags = []
     self.viewNames = ("Fixed", "Moving", "Transformed")
     self.volumeSelectDialog = None
+    self.currentRegistrationInterface = None
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -161,10 +162,10 @@ class LandmarkRegistrationWidget:
     #
     # Registration Options
     #
-    registrationCollapsibleButton = ctk.ctkCollapsibleButton()
-    registrationCollapsibleButton.text = "Registration"
-    self.interfaceFrame.layout().addWidget(registrationCollapsibleButton)
-    registrationFormLayout = qt.QFormLayout(registrationCollapsibleButton)
+    self.registrationCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.registrationCollapsibleButton.text = "Registration"
+    self.interfaceFrame.layout().addWidget(self.registrationCollapsibleButton)
+    registrationFormLayout = qt.QFormLayout(self.registrationCollapsibleButton)
 
     #
     # registration type selection
@@ -309,8 +310,7 @@ class LandmarkRegistrationWidget:
     fixed = self.volumeSelectors['Fixed'].currentNode()
     moving = self.volumeSelectors['Moving'].currentNode()
     transformed = self.volumeSelectors['Transformed'].currentNode()
-    for registrationType in self.registrationTypes:
-      self.registrationTypeInterfaces[registrationType].enabled = bool(fixed and moving)
+    self.registrationCollapsibleButton.enabled = bool(fixed and moving)
     self.logic.hiddenFiducialVolumes = (transformed,)
 
   def onLayout(self, layoutMode="Axi/Sag/Cor",volumesToShow=None):
@@ -350,9 +350,11 @@ class LandmarkRegistrationWidget:
 
   def onRegistrationType(self,pickedRegistrationType):
     """Pick which registration type to display"""
-    for registrationType in self.registrationTypes:
-      self.registrationTypeInterfaces[registrationType].hide()
-    self.registrationTypeInterfaces[pickedRegistrationType].show()
+    if self.currentRegistrationInterface:
+      self.currentRegistrationInterface.destroy()
+    interfaceClass = slicer.modules.registrationPlugins[pickedRegistrationType]
+    self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
+    self.currentRegistrationInterface.create()
 
   def onLinearActive(self,active):
     """Turn on linear mode if possible"""
