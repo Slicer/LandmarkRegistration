@@ -80,6 +80,7 @@ class RegistrationPlugin(object):
       w.setParent(None)
     self.widgets = []
 
-  def onLandmarkMoved(self):
+  def onLandmarkMoved(self,state):
     """Called when the user changes a landmark"""
+    print(state)
     pass

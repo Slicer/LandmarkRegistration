@@ -100,7 +100,7 @@ class LandmarkRegistrationWidget:
       self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
       # reload and run specific tests
-      scenarios = ("Basic", "Linear", "Thin Plate")
+      scenarios = ("Basic", "Affine", "Thin Plate")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
@@ -141,6 +141,19 @@ class LandmarkRegistrationWidget:
     self.volumeSelectors["Transformed"].addEnabled = True
     self.volumeSelectors["Transformed"].selectNodeUponCreation = True
     self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
+
+    self.linearTransformSelector = slicer.qMRMLNodeComboBox()
+    self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
+    self.linearTransformSelector.selectNodeUponCreation = True
+    self.linearTransformSelector.addEnabled = True
+    self.linearTransformSelector.removeEnabled = True
+    self.linearTransformSelector.noneEnabled = True
+    self.linearTransformSelector.showHidden = False
+    self.linearTransformSelector.showChildNodeTypes = False
+    self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
+    self.linearTransformSelector.setToolTip( "The transform for linear registration" )
+    self.linearTransformSelector.enabled = False
+    parametersFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
 
     #
     # Visualization Widget
@@ -265,9 +278,22 @@ class LandmarkRegistrationWidget:
     if fixedID and movingID:
       self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
+      # create transform and transformed if needed
+      transform = self.linearTransformSelector.currentNode()
+      if not transform:
+        self.linearTransformSelector.addNode()
+        transform = self.linearTransformSelector.currentNode()
+      transformed = self.volumeSelectors['Transformed'].currentNode()
+      if not transformed:
+        volumesLogic = slicer.modules.volumes.logic()
+        moving = self.volumeSelectors['Moving'].currentNode()
+        transformedName = "%s-transformed" % moving.GetName()
+        transformed = slicer.util.getNode(transformedName)
+        if not transformed:
+          transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+      self.volumeSelectors['Transformed'].setCurrentNode(transformed)
       self.onLayout()
-
-    self.interfaceFrame.enabled = True
+      self.interfaceFrame.enabled = True
 
   def cleanup(self):
     self.removeObservers()
@@ -293,6 +319,19 @@ class LandmarkRegistrationWidget:
     for obj,tag in self.observerTags:
       obj.RemoveObserver(tag)
     self.observerTags = []
+
+  def registationState(self):
+    """Return an instance of RegistrationState populated
+    with current gui parameters"""
+    state = RegistrationLib.RegistrationState()
+    state.fixed = self.volumeSelectors["Fixed"].currentNode()
+    state.moving = self.volumeSelectors["Moving"].currentNode()
+    state.transformed = self.volumeSelectors["Transformed"].currentNode()
+    state.fixedFiducials = self.logic.volumeFiducialList(state.fixed)
+    state.movingFiducials = self.logic.volumeFiducialList(state.moving)
+    state.transformedFiducials = self.logic.volumeFiducialList(state.transformed)
+    state.linearTransform = self.linearTransformSelector.currentNode()
+    return(state)
 
   def currentVolumeNodes(self):
     """List of currently selected volume nodes"""
@@ -389,7 +428,6 @@ class LandmarkRegistrationWidget:
     for mode in self.linearModes:
       if self.linearModeButtons[mode].checked:
         self.logic.linearMode = mode
-        self.onLinearActive(self.linearRegistrationActive.checked)
         break
 
   def onThinPlateApply(self):
@@ -472,9 +510,9 @@ class LandmarkRegistrationWidget:
     """Called when a landmark is moved (probably through
     manipulation of the widget in the slice view).
     This updates the active registration"""
-    # if self.linearRegistrationActive.checked and not self.landmarksWidget.movingView:
-    if self.linearRegistrationActive.checked:
-      self.onLinearActive(True)
+    if self.currentRegistrationInterface:
+      state = self.registationState()
+      self.currentRegistrationInterface.onLandmarkMoved(state)
 
   def onReload(self,moduleName="LandmarkRegistration"):
     """Generic reload method for any scripted module.
@@ -485,6 +523,8 @@ class LandmarkRegistrationWidget:
 
     # reload all the support code and have the plugins
     # re-register themselves with slicer
+    if self.currentRegistrationInterface:
+      self.currentRegistrationInterface.destroy()
     oldPlugins = slicer.modules.registrationPlugins
     slicer.modules.registrationPlugins = {}
     for plugin in oldPlugins.values():
@@ -909,7 +949,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.setUp()
     if scenario == "Basic":
       self.test_LandmarkRegistration1()
-    elif scenario == "Linear":
+    elif scenario == "Affine":
       self.test_LandmarkRegistration2()
     elif scenario == "Thin Plate":
       self.test_LandmarkRegistration3()
@@ -975,12 +1015,14 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.delayDisplay('Two data sets loaded')
 
     w = slicer.modules.LandmarkRegistrationWidget
-    w.volumeSelectors["Fixed"].setCurrentNode(pre)
-    w.volumeSelectors["Moving"].setCurrentNode(post)
+    w.setupDialog()
+    w.volumeDialogSelectors["Fixed"].setCurrentNode(post)
+    w.volumeDialogSelectors["Moving"].setCurrentNode(pre)
+    w.onVolumeDialogApply()
 
     # initiate linear registration
-    w.onRegistrationType("Linear")
-    w.linearRegistrationActive.checked = True
+    w.registrationTypeButtons["Affine"].checked = True
+    w.registrationTypeButtons["Affine"].clicked()
 
     w.onLayout(layoutMode="Axi/Sag/Cor")
 
@@ -1017,7 +1059,6 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
 
     w.landmarksWidget.pickLandmark('L-4')
-    w.linearRegistrationActive.checked = False
     w.onRegistrationType("Thin Plate")
     w.onThinPlateApply()
 

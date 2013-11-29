@@ -65,12 +65,6 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     self.linearCollapsibleButton.setLayout(linearFormLayout)
     self.widgets.append(self.linearCollapsibleButton)
 
-    self.linearRegistrationActive = qt.QCheckBox()
-    self.linearRegistrationActive.checked = True
-    self.linearRegistrationActive.connect("toggled(bool)", self.onLinearActive)
-    linearFormLayout.addRow("Registration Active: ", self.linearRegistrationActive)
-    self.widgets.append(self.linearRegistrationActive)
-
     buttonLayout = qt.QVBoxLayout()
     self.linearModeButtons = {}
     self.linearModes = ("Rigid", "Similarity", "Affine")
@@ -104,15 +98,45 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     """Clean up"""
     super(AffinePlugin,self).destroy()
 
-  def onLandmarkMoved(self):
-    """Called when the user changes a landmark"""
-    pass
+  def onLandmarkMoved(self,state):
+    """Perform the linear transform using the vtkLandmarkTransform class"""
+    if state.transformed.GetTransformNodeID() != state.linearTransform.GetID():
+      state.transformed.SetAndObserveTransformNodeID(state.linearTransform.GetID())
 
-  def onLinearActive(self):
-    pass
+    self.linearMode = "Rigid"
+
+    # try to use user selection, but fall back if not enough points are available
+    landmarkTransform = vtk.vtkLandmarkTransform()
+    if self.linearMode == 'Rigid':
+      landmarkTransform.SetModeToRigidBody()
+    if self.linearMode == 'Similarity':
+      landmarkTransform.SetModeToSimilarity()
+    if self.linearMode == 'Affine':
+      landmarkTransform.SetModeToAffine()
+    if state.fixedFiducials.GetNumberOfFiducials() < 3:
+      landmarkTransform.SetModeToRigidBody()
+
+    points = {}
+    point = [0,]*3
+    for volumeNode in (state.fixed,state.moving):
+      points[volumeNode] = vtk.vtkPoints()
+    indices = range(state.fixedFiducials.GetNumberOfFiducials())
+    fiducialLists = (state.fixedFiducials,state.movingFiducials)
+    volumeNodes = (state.fixed,state.moving)
+    for fiducials,volumeNode in zip(fiducialLists,volumeNodes):
+      for index in indices:
+        fiducials.GetNthFiducialPosition(index,point)
+        points[volumeNode].InsertNextPoint(point)
+    landmarkTransform.SetSourceLandmarks(points[state.moving])
+    landmarkTransform.SetTargetLandmarks(points[state.fixed])
+    landmarkTransform.Update()
+    t = state.linearTransform
+    t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
 
   def onLinearTransform(self):
     pass
+
+
 
 # Add this plugin to the dictionary of available registrations.
 # Since this module may be discovered before the Editor itself,

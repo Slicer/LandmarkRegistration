@@ -75,7 +75,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     """Clean up"""
     super(ThinPlatePlugin,self).destroy()
 
-  def onLandmarkMoved(self):
+  def onLandmarkMoved(self,state):
     """Called when the user changes a landmark"""
     pass
 
