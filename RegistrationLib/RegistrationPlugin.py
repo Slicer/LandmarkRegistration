@@ -30,7 +30,7 @@ class RegistrationPlugin(object):
   #
   # generic settings that can (should) be overridden by the subclass
   #
-  
+
   # displayed for the user to select the registration
   name = "Generic Registration"
   tooltip = "No additional information available"
@@ -55,11 +55,16 @@ class RegistrationPlugin(object):
     self.parent = parent
     self.observerTags = []
     self.widgets = []
-    
+
 
   def create(self,registationState):
     """Call this method from your subclass to manage dynamic layout
-    and widget deleting"""
+    and widget deleting
+    - registationState is a callable object that will give you an instance
+    of a RegistrationState object that you can use to determine the current
+    state of the fixed, moving, and other parameters of the parent gui.
+    """
+    self.registationState = registationState
     if not self.parent:
       self.parent = slicer.qMRMLWidget()
       self.parent.setLayout(qt.QVBoxLayout())

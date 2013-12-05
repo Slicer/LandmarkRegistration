@@ -528,7 +528,18 @@ class LandmarkRegistrationWidget:
     oldPlugins = slicer.modules.registrationPlugins
     slicer.modules.registrationPlugins = {}
     for plugin in oldPlugins.values():
-      imp.load_source(plugin.__module__, plugin.sourceFile.replace('.pyc', '.py'))
+      pluginModuleName = plugin.__module__.lower()
+      if hasattr(slicer.modules,pluginModuleName):
+        # for a plugin from an extension, need to get the source path
+        # from the module
+        module = getattr(slicer.modules,pluginModuleName)
+        sourceFile = module.path
+      else:
+        # for a plugin built with slicer itself, the file path comes
+        # from the pyc path noted as __file__ at startup time
+        sourceFile = plugin.sourceFile.replace('.pyc', '.py')
+      print('loading from ', sourceFile)
+      imp.load_source(plugin.__module__, sourceFile)
     oldPlugins = None
 
     widgetName = moduleName + "Widget"
