@@ -57,7 +57,7 @@ class RegistrationPlugin(object):
     self.widgets = []
     
 
-  def create(self):
+  def create(self,registationState):
     """Call this method from your subclass to manage dynamic layout
     and widget deleting"""
     if not self.parent:

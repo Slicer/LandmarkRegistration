@@ -393,7 +393,7 @@ class LandmarkRegistrationWidget:
       self.currentRegistrationInterface.destroy()
     interfaceClass = slicer.modules.registrationPlugins[pickedRegistrationType]
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
-    self.currentRegistrationInterface.create()
+    self.currentRegistrationInterface.create(self.registationState)
 
   def onLinearActive(self,active):
     """Turn on linear mode if possible"""

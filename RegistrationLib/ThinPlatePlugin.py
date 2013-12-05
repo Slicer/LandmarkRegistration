@@ -51,9 +51,9 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   def __init__(self,parent=None):
     super(ThinPlatePlugin,self).__init__(parent)
 
-  def create(self):
+  def create(self,registationState):
     """Make the plugin-specific user interface"""
-    super(ThinPlatePlugin,self).create()
+    super(ThinPlatePlugin,self).create(registationState)
     #
     # Thin Plate Spline Registration Pane
     #

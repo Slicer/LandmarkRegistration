@@ -51,9 +51,9 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
   def __init__(self,parent=None):
     super(AffinePlugin,self).__init__(parent)
 
-  def create(self):
+  def create(self,registationState):
     """Make the plugin-specific user interface"""
-    super(AffinePlugin,self).create()
+    super(AffinePlugin,self).create(registationState)
     #
     # Linear Registration Pane - initially hidden
     # - interface options for linear registration
