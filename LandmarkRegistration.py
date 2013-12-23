@@ -538,7 +538,6 @@ class LandmarkRegistrationWidget:
         # for a plugin built with slicer itself, the file path comes
         # from the pyc path noted as __file__ at startup time
         sourceFile = plugin.sourceFile.replace('.pyc', '.py')
-      print('loading from ', sourceFile)
       imp.load_source(plugin.__module__, sourceFile)
     oldPlugins = None
 
