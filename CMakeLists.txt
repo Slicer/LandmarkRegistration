@@ -15,6 +15,7 @@ set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
   ${LIB_NAME}/__init__.py
   ${LIB_NAME}/AffinePlugin.py
+  ${LIB_NAME}/Landmarks.py
   ${LIB_NAME}/RegistrationPlugin.py
   ${LIB_NAME}/RegistrationState.py
   ${LIB_NAME}/ThinPlatePlugin.py
