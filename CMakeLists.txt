@@ -13,13 +13,13 @@ endif()
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
-  ${LIB_NAME}Lib/__init__
-  ${LIB_NAME}Lib/AffinePlugin
-  ${LIB_NAME}Lib/RegistrationPlugin
-  ${LIB_NAME}Lib/RegistrationState
-  ${LIB_NAME}Lib/ThinPlatePlugin
-  ${LIB_NAME}Lib/Visualization
-  ${LIB_NAME}Lib/pqWidget
+  ${LIB_NAME}Lib/__init__.py
+  ${LIB_NAME}Lib/AffinePlugin.py
+  ${LIB_NAME}Lib/RegistrationPlugin.py
+  ${LIB_NAME}Lib/RegistrationState.py
+  ${LIB_NAME}Lib/ThinPlatePlugin.py
+  ${LIB_NAME}Lib/Visualization.py
+  ${LIB_NAME}Lib/pqWidget.py
   )
 
 set(MODULE_PYTHON_RESOURCES
