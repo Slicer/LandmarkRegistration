@@ -350,7 +350,16 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
       self.linearRegistrationActive.checked = True
       self.onLinearActive(self.linearRegistrationActive.checked)
-      self.onLayout()
+
+      try:
+        print('trying')
+        self.onLayout()
+        print('tried')
+      except Exception, e:
+        import traceback
+        traceback.print_exc()
+        qt.QMessageBox.warning(slicer.util.mainWindow(),
+            "Layout", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
     self.interfaceFrame.enabled = True
 
@@ -403,9 +412,11 @@ class LandmarkRegistrationWidget:
     """When the layout is changed by the VisualizationWidget
     volumesToShow: list of the volumes to include, None means include all
     """
+    print('onLayout')
     volumeNodes = []
     activeViewNames = []
     for viewName in self.viewNames:
+      print('looking at ', viewName)
       volumeNode = self.volumeSelectors[viewName].currentNode()
       if volumeNode and not (volumesToShow and viewName not in volumesToShow):
         volumeNodes.append(volumeNode)
@@ -413,13 +424,22 @@ class LandmarkRegistrationWidget:
     import CompareVolumes
     compareLogic = CompareVolumes.CompareVolumesLogic()
     oneViewModes = ('Axial', 'Sagittal', 'Coronal',)
+    print(layoutMode)
     if layoutMode in oneViewModes:
+      print('calling viewerPerVolume one')
       self.sliceNodesByViewName = compareLogic.viewerPerVolume(volumeNodes,viewNames=activeViewNames,orientation=layoutMode)
     elif layoutMode == 'Axi/Sag/Cor':
+      print('calling viewerPerVolume two')
+      print('self.sliceNodesByViewName')
+      print(self.sliceNodesByViewName)
       self.sliceNodesByViewName = compareLogic.viewersPerVolume(volumeNodes)
+    print('self.sliceNodesByViewName')
     self.overlayFixedOnTransformed()
+    print('overlayFixedOnTransformed')
     self.updateSliceNodesByVolumeID()
+    print('updateSliceNodesByVolumeID')
     self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
+    print('onLandmarkPicked')
 
   def overlayFixedOnTransformed(self):
     """If there are viewers showing the tranfsformed volume
@@ -536,6 +556,7 @@ class LandmarkRegistrationWidget:
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
+    print('onLandmarkPicked')
     if not self.landmarksWidget.movingView:
       # only change the fiducials if they are not being manipulated
       self.restrictLandmarksToViews()
@@ -556,6 +577,7 @@ class LandmarkRegistrationWidget:
     """Called when a landmark is moved (probably through
     manipulation of the widget in the slice view).
     This updates the active registration"""
+    print('onLandmarkMoved')
     # if self.linearRegistrationActive.checked and not self.landmarksWidget.movingView:
     if self.linearRegistrationActive.checked:
       self.onLinearActive(True)
@@ -842,6 +864,7 @@ class LandmarksWidget(pqWidget):
     """Callback when fiducialList's point has been changed.
     Check the Markups.State attribute to see if it is being
     actively moved and if so, skip the picked method."""
+    print('onFiducialMoved')
     self.movingView = fiducialList.GetAttribute('Markups.MovingInSliceView')
     movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
     if self.movingView and movingIndexAttribute:
