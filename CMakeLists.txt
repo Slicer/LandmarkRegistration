@@ -12,8 +12,13 @@ endif()
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
-  LandmarkAffineRegistrationPlugin.py
-  LandmarkThinPlateSplineRegistrationPlugin.py
+  ${MODULE_NAME}Lib/__init__
+  ${MODULE_NAME}Lib/AffinePlugin
+  ${MODULE_NAME}Lib/RegistrationPlugin
+  ${MODULE_NAME}Lib/RegistrationState
+  ${MODULE_NAME}Lib/ThinPlatePlugin
+  ${MODULE_NAME}Lib/Visualization
+  ${MODULE_NAME}Lib/pqWidget
   )
 
 set(MODULE_PYTHON_RESOURCES
@@ -24,6 +29,7 @@ slicerMacroBuildScriptedModule(
   NAME ${MODULE_NAME}
   SCRIPTS ${MODULE_PYTHON_SCRIPTS}
   RESOURCES ${MODULE_PYTHON_RESOURCES}
+  WITH_GENERIC_TESTS
   )
 
 #-----------------------------------------------------------------------------
