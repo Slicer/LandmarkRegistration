@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 
 #-----------------------------------------------------------------------------
 set(MODULE_NAME LandmarkRegistration)
+set(LIB_NAME RegistrationLib)
 
 #-----------------------------------------------------------------------------
 if(NOT Slicer_SOURCE_DIR)
@@ -12,13 +13,13 @@ endif()
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
-  ${MODULE_NAME}Lib/__init__
-  ${MODULE_NAME}Lib/AffinePlugin
-  ${MODULE_NAME}Lib/RegistrationPlugin
-  ${MODULE_NAME}Lib/RegistrationState
-  ${MODULE_NAME}Lib/ThinPlatePlugin
-  ${MODULE_NAME}Lib/Visualization
-  ${MODULE_NAME}Lib/pqWidget
+  ${LIB_NAME}Lib/__init__
+  ${LIB_NAME}Lib/AffinePlugin
+  ${LIB_NAME}Lib/RegistrationPlugin
+  ${LIB_NAME}Lib/RegistrationState
+  ${LIB_NAME}Lib/ThinPlatePlugin
+  ${LIB_NAME}Lib/Visualization
+  ${LIB_NAME}Lib/pqWidget
   )
 
 set(MODULE_PYTHON_RESOURCES
