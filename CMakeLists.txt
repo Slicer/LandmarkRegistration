@@ -12,6 +12,8 @@ endif()
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
+  LandmarkAffineRegistrationPlugin.py
+  LandmarkThinPlateSplineRegistrationPlugin.py
   )
 
 set(MODULE_PYTHON_RESOURCES
