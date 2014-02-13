@@ -125,24 +125,6 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     t = state.linearTransform
     t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
 
-    """
-    points = {}
-    point = [0,]*3
-    for volumeNode in (state.fixed, state.moving):
-      points[volumeNode] = vtk.vtkPoints()
-    indices = range(state.fixedFiducials.GetNumberOfFiducials())
-    fiducialLists = (state.fixedFiducials,state.movingFiducials)
-    volumeNodes = (state.fixed,state.moving)
-    for fiducials,volumeNode in zip(fiducialLists,volumeNodes):
-      for index in indices:
-        fiducials.GetNthFiducialPosition(index,point)
-        points[volumeNode].InsertNextPoint(point)
-    landmarkTransform.SetSourceLandmarks(points[state.moving])
-    landmarkTransform.SetTargetLandmarks(points[state.fixed])
-    landmarkTransform.Update()
-    t = state.linearTransform
-    t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
-    """
 
   def onLinearTransform(self):
     pass
