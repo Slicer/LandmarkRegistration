@@ -34,7 +34,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   
   # displayed for the user to select the registration
   name = "ThinPlate Registration"
-  tooltip = "Uses landmarks to define linear transform matrices"
+  tooltip = "Uses landmarks to define nonlinear warp transform"
 
   # can be true or false
   # - True: landmarks are displayed and managed by LandmarkRegistration
@@ -80,7 +80,19 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     pass
 
   def onThinPlateApply(self):
-    print('applying')
+    """Call this whenever thin plate needs to be calculated"""
+    fixed = self.volumeSelectors['Fixed'].currentNode()
+    moving = self.volumeSelectors['Moving'].currentNode()
+    if fixed and moving:
+      transformed = self.volumeSelectors['Transformed'].currentNode()
+      if not transformed:
+        volumesLogic = slicer.modules.volumes.logic()
+        transformedName = "%s-transformed" % moving.GetName()
+        transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+        self.volumeSelectors['Transformed'].setCurrentNode(transformed)
+      landmarks = self.logic.landmarksForVolumes((fixed,moving))
+      self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
+
 
 # Add this plugin to the dictionary of available registrations.
 # Since this module may be discovered before the Editor itself,

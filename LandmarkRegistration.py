@@ -100,7 +100,7 @@ class LandmarkRegistrationWidget:
       self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
       # reload and run specific tests
-      scenarios = ("Basic", "Affine", "Thin Plate")
+      scenarios = ("Basic", "Affine", "ThinPlate")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
@@ -395,64 +395,6 @@ class LandmarkRegistrationWidget:
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
     self.currentRegistrationInterface.create(self.registationState)
 
-  def onLinearActive(self,active):
-    """Turn on linear mode if possible"""
-    if not active:
-      print('skipping registration')
-      self.logic.disableLinearRegistration()
-    else:
-      # ensure we have fixed and moving
-      fixed = self.volumeSelectors['Fixed'].currentNode()
-      moving = self.volumeSelectors['Moving'].currentNode()
-      if not (fixed and moving):
-        return
-      else:
-        # create transform and transformed if needed
-        transform = self.linearTransformSelector.currentNode()
-        if not transform:
-          self.linearTransformSelector.addNode()
-          transform = self.linearTransformSelector.currentNode()
-        transformed = self.volumeSelectors['Transformed'].currentNode()
-        if not transformed:
-          volumesLogic = slicer.modules.volumes.logic()
-          transformedName = "%s-transformed" % moving.GetName()
-          transformed = slicer.util.getNode(transformedName)
-          if not transformed:
-            transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
-          self.volumeSelectors['Transformed'].setCurrentNode(transformed)
-        landmarks = self.logic.landmarksForVolumes((fixed,moving))
-        self.logic.enableLinearRegistration(fixed,moving,landmarks,transform,transformed)
-
-  def onLinearTransform(self):
-    """Call this whenever linear transform needs to be updated"""
-    for mode in self.linearModes:
-      if self.linearModeButtons[mode].checked:
-        self.logic.linearMode = mode
-        break
-
-  def onThinPlateApply(self):
-    """Call this whenever thin plate needs to be calculated"""
-    fixed = self.volumeSelectors['Fixed'].currentNode()
-    moving = self.volumeSelectors['Moving'].currentNode()
-    if fixed and moving:
-      transformed = self.volumeSelectors['Transformed'].currentNode()
-      if not transformed:
-        volumesLogic = slicer.modules.volumes.logic()
-        transformedName = "%s-transformed" % moving.GetName()
-        transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
-        self.volumeSelectors['Transformed'].setCurrentNode(transformed)
-      landmarks = self.logic.landmarksForVolumes((fixed,moving))
-      self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
-
-  def onHybridTransformApply(self):
-    """Call this whenever hybrid transform needs to be calculated"""
-    import os,sys
-    loadablePath = os.path.join(slicer.modules.plastimatch_slicer_bspline.path,'../../qt-loadable-modules')
-    if loadablePath not in sys.path:
-      sys.path.append(loadablePath)
-    import vtkSlicerPlastimatchModuleLogicPython
-    print('running hybrid...')
-
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
     node that are currently displaying a given volumeID"""
@@ -521,10 +463,26 @@ class LandmarkRegistrationWidget:
     """
     import imp, sys, os, slicer
 
-    # reload all the support code and have the plugins
-    # re-register themselves with slicer
+    # first, destroy the current plugin, since it will
+    # contain subclasses of the RegistrationLib modules
     if self.currentRegistrationInterface:
       self.currentRegistrationInterface.destroy()
+
+    # now reload the RegistrationLib source code
+    # - set source file path
+    # - load the module to the global space
+    filePath = eval('slicer.modules.%s.path' % moduleName.lower())
+    p = os.path.dirname(filePath)
+    if not sys.path.__contains__(p):
+      sys.path.insert(0,p)
+    for subModuleName in ("pqWidget", "Visualization", "Landmarks", ):
+      fp = open(filePath, "r")
+      globals()[subModuleName] = imp.load_module(
+          subModuleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
+      fp.close()
+
+    # now reload all the support code and have the plugins
+    # re-register themselves with slicer
     oldPlugins = slicer.modules.registrationPlugins
     slicer.modules.registrationPlugins = {}
     for plugin in oldPlugins.values():
@@ -543,7 +501,7 @@ class LandmarkRegistrationWidget:
 
     widgetName = moduleName + "Widget"
 
-    # reload the source code
+    # now reload the widget module source code
     # - set source file path
     # - load the module to the global space
     filePath = eval('slicer.modules.%s.path' % moduleName.lower())
@@ -819,46 +777,6 @@ class LandmarkRegistrationLogic:
               addedLandmark = addedFiducial
     return addedLandmark
 
-  def enableLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
-    self.performLinearRegistration(fixed,moving,landmarks,transform,transformed)
-    # TODO: set up observers on fixed and moving fiducial
-    pass
-
-  def performLinearRegistration(self,fixed,moving,landmarks,transform,transformed):
-    """Perform the linear transform using the vtkLandmarkTransform class"""
-
-    if transformed.GetTransformNodeID() != transform.GetID():
-      transformed.SetAndObserveTransformNodeID(transform.GetID())
-
-    # try to use user selection, but fall back if not enough points are available
-    landmarkTransform = vtk.vtkLandmarkTransform()
-    if self.linearMode == 'Rigid':
-      landmarkTransform.SetModeToRigidBody()
-    if self.linearMode == 'Similarity':
-      landmarkTransform.SetModeToSimilarity()
-    if self.linearMode == 'Affine':
-      landmarkTransform.SetModeToAffine()
-    if len(landmarks.values()) < 3:
-      landmarkTransform.SetModeToRigidBody()
-
-    points = {}
-    point = [0,]*3
-    for volumeNode in (fixed,moving):
-      points[volumeNode] = vtk.vtkPoints()
-    for fiducials in landmarks.values():
-      for volumeNode,fid in zip((fixed,moving),fiducials):
-        fiducialList,index = fid
-        fiducialList.GetNthFiducialPosition(index,point)
-        points[volumeNode].InsertNextPoint(point)
-    landmarkTransform.SetSourceLandmarks(points[moving])
-    landmarkTransform.SetTargetLandmarks(points[fixed])
-    landmarkTransform.Update()
-    transform.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
-
-  def disableLinearRegistration(self):
-    print("disableLinearRegistration")
-    pass
-
   def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
     """
     Fills the targetNode's vtkImageData with the source after
@@ -958,22 +876,22 @@ class LandmarkRegistrationTest(unittest.TestCase):
     """
     self.setUp()
     if scenario == "Basic":
-      self.test_LandmarkRegistration1()
+      self.test_LandmarkRegistrationBasic()
     elif scenario == "Affine":
-      self.test_LandmarkRegistration2()
-    elif scenario == "Thin Plate":
-      self.test_LandmarkRegistration3()
+      self.test_LandmarkRegistrationAffine()
+    elif scenario == "ThinPlate":
+      self.test_LandmarkRegistrationThinPlate()
     else:
-      self.test_LandmarkRegistration1()
-      self.test_LandmarkRegistration2()
-      self.test_LandmarkRegistration3()
+      self.test_LandmarkRegistrationBasic()
+      self.test_LandmarkRegistrationAffine()
+      self.test_LandmarkRegistrationThinPlate()
 
-  def test_LandmarkRegistration1(self):
+  def test_LandmarkRegistrationBasic(self):
     """
     This tests basic landmarking with two volumes
     """
 
-    self.delayDisplay("Starting test_LandmarkRegistration1")
+    self.delayDisplay("Starting test_LandmarkRegistrationBasic")
     #
     # first, get some data
     #
@@ -1007,15 +925,15 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.onLayout()
     w.onLandmarkPicked('tip-of-nose')
 
-    self.delayDisplay('test_LandmarkRegistration1 passed!')
+    self.delayDisplay('test_LandmarkRegistrationBasic passed!')
 
-  def test_LandmarkRegistration2(self):
+  def test_LandmarkRegistrationAffine(self):
     """
     This tests basic linear registration with two
     volumes (pre- post-surgery)
     """
 
-    self.delayDisplay("Starting test_LandmarkRegistration2")
+    self.delayDisplay("Starting test_LandmarkRegistrationAffine")
     #
     # first, get some data
     #
@@ -1036,13 +954,13 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
     w.onLayout(layoutMode="Axi/Sag/Cor")
 
-    self.delayDisplay('test_LandmarkRegistration2 passed!')
+    self.delayDisplay('test_LandmarkRegistrationAffine passed!')
 
-  def test_LandmarkRegistration3(self):
+  def test_LandmarkRegistrationThinPlate(self):
     """Test the thin plate spline transform"""
-    self.test_LandmarkRegistration2()
+    self.test_LandmarkRegistrationAffine()
 
-    self.delayDisplay('starting test_LandmarkRegistration3')
+    self.delayDisplay('starting test_LandmarkRegistrationThinPlate')
     w = slicer.modules.LandmarkRegistrationWidget
     pre = w.volumeSelectors["Fixed"].currentNode()
     post = w.volumeSelectors["Moving"].currentNode()
@@ -1068,9 +986,14 @@ class LandmarkRegistrationTest(unittest.TestCase):
         w.logic.addFiducial(name, position=point,associatedNode=pre)
 
 
-    w.landmarksWidget.pickLandmark('L-4')
-    w.onRegistrationType("Thin Plate")
-    w.onThinPlateApply()
+    # initiate linear registration
+    w.registrationTypeButtons["ThinPlate"].checked = True
+    w.registrationTypeButtons["ThinPlate"].clicked()
 
-    self.delayDisplay('test_LandmarkRegistration3 passed!')
+    w.landmarksWidget.pickLandmark('L-4')
+    w.onRegistrationType("ThinPlate")
+
+    w.currentRegistrationInterface.onThinPlateApply()
+
+    self.delayDisplay('test_LandmarkRegistrationThinPlate passed!')
 

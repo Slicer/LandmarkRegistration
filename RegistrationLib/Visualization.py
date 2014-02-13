@@ -9,7 +9,11 @@ class VisualizationWidget(RegistrationLib.pqWidget):
 
   def __init__(self,logic):
     super(VisualizationWidget,self).__init__()
+    self.rockCount = 0
+    self.rocking = False
+    self.rockTimer = None
     self.logic = logic
+    self.revealCursor = None
     self.volumes = ("Fixed", "Moving", "Transformed",)
     self.layoutOptions = ("Axial", "Coronal", "Sagittal", "Axi/Sag/Cor",)
     self.layoutOption = 'Axi/Sag/Cor'
@@ -51,18 +55,33 @@ class VisualizationWidget(RegistrationLib.pqWidget):
       checkBox.connect('toggled(bool)', self.updateVisualization)
       layout.addWidget(checkBox)
       self.volumeDisplayCheckboxes[volume] = checkBox
+    checkBox = qt.QCheckBox()
+    checkBox.text = "RevealCursor"
+    checkBox.checked = False
+    checkBox.connect('toggled(bool)', self.revealToggled)
+    layout.addWidget(checkBox)
+    self.volumeDisplayCheckboxes[volume] = checkBox
     self.groupBoxLayout.addRow("Display", checkboxHolder)
 
     #
     # fade slider
     #
+    fadeHolder = qt.QWidget()
+    layout = qt.QHBoxLayout()
+    fadeHolder.setLayout(layout)
     self.fadeSlider = ctk.ctkSliderWidget()
     self.fadeSlider.minimum = 0
     self.fadeSlider.maximum = 1.0
     self.fadeSlider.value = 0.5
     self.fadeSlider.singleStep = 0.05
     self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
-    self.groupBoxLayout.addRow("Cross Fade", self.fadeSlider)
+    layout.addWidget(self.fadeSlider)
+    checkBox = qt.QCheckBox()
+    checkBox.text = "Rock"
+    checkBox.checked = False
+    checkBox.connect('toggled(bool)', self.onRockToggled)
+    layout.addWidget(checkBox)
+    self.groupBoxLayout.addRow("Cross Fade", fadeHolder)
 
     #
     # zoom control
@@ -70,7 +89,7 @@ class VisualizationWidget(RegistrationLib.pqWidget):
     zoomHolder = qt.QWidget()
     layout = qt.QHBoxLayout()
     zoomHolder.setLayout(layout)
-    zooms = {"+": 0.9, "-": 1.1, "Fit": "Fit",}
+    zooms = {"+": 0.7, "-": 1.3, "Fit": "Fit",}
     for zoomLabel,zoomFactor in zooms.items():
       zoomButton = qt.QPushButton(zoomLabel)
       zoomButton.connect('clicked()', lambda zf=zoomFactor: self.onZoom(zf))
@@ -93,11 +112,36 @@ class VisualizationWidget(RegistrationLib.pqWidget):
     self.fadeSlider.enabled = "Transformed" in volumesToShow
     self.emit("layoutRequested(mode,volumesToShow)", (self.layoutOption,volumesToShow))
 
+  def revealToggled(self,checked):
+    """Turn the RevealCursor on or off
+    """
+    if self.revealCursor:
+      self.revealCursor.tearDown()
+    if checked:
+      import CompareVolumes
+      self.revealCursor = CompareVolumes.LayerReveal()
+
   def onFadeChanged(self,value):
     """Update all the slice compositing"""
     nodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
     for node in nodes.values():
       node.SetForegroundOpacity(value)
+
+  def rock(self):
+    if not self.rocking:
+      self.rockTimer = None
+    if self.rocking:
+      if not self.rockTimer:
+        self.rockTimer = qt.QTimer()
+        self.rockTimer.start(100)
+        self.rockTimer.connect('timeout()', self.rock)
+      import math
+      self.fadeSlider.value = 0.5 + math.sin(self.rockCount / 10. ) / 2.
+      self.rockCount += 1
+
+  def onRockToggled(self,checked):
+    self.rocking = checked
+    self.rock()
 
   def onZoom(self,zoomFactor):
     import CompareVolumes
