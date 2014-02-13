@@ -31,7 +31,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   #
   # generic settings that can (should) be overridden by the subclass
   #
-  
+
   # displayed for the user to select the registration
   name = "ThinPlate Registration"
   tooltip = "Uses landmarks to define nonlinear warp transform"
@@ -81,17 +81,30 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
 
   def onThinPlateApply(self):
     """Call this whenever thin plate needs to be calculated"""
-    fixed = self.volumeSelectors['Fixed'].currentNode()
-    moving = self.volumeSelectors['Moving'].currentNode()
-    if fixed and moving:
-      transformed = self.volumeSelectors['Transformed'].currentNode()
-      if not transformed:
-        volumesLogic = slicer.modules.volumes.logic()
-        transformedName = "%s-transformed" % moving.GetName()
-        transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
-        self.volumeSelectors['Transformed'].setCurrentNode(transformed)
-      landmarks = self.logic.landmarksForVolumes((fixed,moving))
-      self.logic.performThinPlateRegistration(fixed,moving,landmarks,transformed)
+    state = self.registationState()
+
+    if state.fixed and state.moving and state.transformed:
+      landmarks = state.logic.landmarksForVolumes((state.fixed, state.moving))
+      self.performThinPlateRegistration(state, landmarks)
+
+  def performThinPlateRegistration(self, state, landmarks):
+    """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
+
+    print('performing thin plate registration')
+    state.transformed.SetAndObserveTransformNodeID(None)
+
+    volumeNodes = (state.fixed, state.moving)
+    fiducialNodes = (state.fixedFiducials,state.movingFiducials)
+    points = state.logic.vtkPointForVolumes( volumeNodes, fiducialNodes )
+
+    # since this is a resample transform, source is the fixed (resampling target) space
+    # and moving is the target space
+    self.thinPlateTransform = vtk.vtkThinPlateSplineTransform()
+    self.thinPlateTransform.SetBasisToR() # for 3D transform
+    self.thinPlateTransform.SetSourceLandmarks(points[state.fixed])
+    self.thinPlateTransform.SetTargetLandmarks(points[state.moving])
+    self.thinPlateTransform.Update()
+    state.logic.resliceThroughTransform(state.moving, self.thinPlateTransform, state.fixed, state.transformed)
 
 
 # Add this plugin to the dictionary of available registrations.

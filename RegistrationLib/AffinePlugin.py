@@ -116,9 +116,19 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     if state.fixedFiducials.GetNumberOfFiducials() < 3:
       landmarkTransform.SetModeToRigidBody()
 
+    volumeNodes = (state.fixed, state.moving)
+    fiducialNodes = (state.fixedFiducials,state.movingFiducials)
+    points = state.logic.vtkPointForVolumes( volumeNodes, fiducialNodes )
+    landmarkTransform.SetSourceLandmarks(points[state.moving])
+    landmarkTransform.SetTargetLandmarks(points[state.fixed])
+    landmarkTransform.Update()
+    t = state.linearTransform
+    t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
+
+    """
     points = {}
     point = [0,]*3
-    for volumeNode in (state.fixed,state.moving):
+    for volumeNode in (state.fixed, state.moving):
       points[volumeNode] = vtk.vtkPoints()
     indices = range(state.fixedFiducials.GetNumberOfFiducials())
     fiducialLists = (state.fixedFiducials,state.movingFiducials)
@@ -132,6 +142,7 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     landmarkTransform.Update()
     t = state.linearTransform
     t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
+    """
 
   def onLinearTransform(self):
     pass

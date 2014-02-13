@@ -324,6 +324,7 @@ class LandmarkRegistrationWidget:
     """Return an instance of RegistrationState populated
     with current gui parameters"""
     state = RegistrationLib.RegistrationState()
+    state.logic = self.logic
     state.fixed = self.volumeSelectors["Fixed"].currentNode()
     state.moving = self.volumeSelectors["Moving"].currentNode()
     state.transformed = self.volumeSelectors["Transformed"].currentNode()
@@ -641,7 +642,6 @@ class LandmarkRegistrationLogic:
       markupsLogic.SetActiveListID(originalActiveList)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
-
   def addLandmark(self,volumeNodes=[], position=(0,0,0)):
     """Add a new landmark by adding correspondingly named
     fiducials to all the current volume nodes.
@@ -777,6 +777,24 @@ class LandmarkRegistrationLogic:
               addedLandmark = addedFiducial
     return addedLandmark
 
+  def vtkPointForVolumes(self, volumeNodes, fiducialNodes):
+    """Return dictionary of vtkPoints instances containing the fiducial points
+    associated with current landmarks, indexed by volume"""
+    points = {}
+    point = [0,]*3
+    for volumeNode in volumeNodes:
+      points[volumeNode] = vtk.vtkPoints()
+    ficucialCount = fiducialNodes[0].GetNumberOfFiducials()
+    for fiducialNode in fiducialNodes:
+      if ficucialCount != fiducialNode.GetNumberOfFiducials():
+        raise Exception("Fiducial counts don't match {0}".format(ficucialCount))
+    indices = range(ficucialCount)
+    for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
+      for index in indices:
+        fiducials.GetNthFiducialPosition(index,point)
+        points[volumeNode].InsertNextPoint(point)
+    return points
+
   def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
     """
     Fills the targetNode's vtkImageData with the source after
@@ -814,28 +832,6 @@ class LandmarkRegistrationLogic:
     self.reslice.UpdateWholeExtent()
     targetNode.SetAndObserveImageData(self.reslice.GetOutput())
 
-  def performThinPlateRegistration(self,fixed,moving,landmarks,transformed):
-    """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
-
-    print('performing thin plate registration')
-    transformed.SetAndObserveTransformNodeID(None)
-
-    self.thinPlateTransform = vtk.vtkThinPlateSplineTransform()
-    self.thinPlateTransform.SetBasisToR() # for 3D transform
-    points = {}
-    point = [0,]*3
-    for volumeNode in (fixed,moving):
-      points[volumeNode] = vtk.vtkPoints()
-    for fiducialName in landmarks.keys():
-      for volumeNode,fid in zip((fixed,moving),landmarks[fiducialName]):
-        fid.GetFiducialCoordinates(point)
-        points[volumeNode].InsertNextPoint(point)
-    # since this is a resample transform, source is the fixed (resampling target) space
-    # and moving is the target space
-    self.thinPlateTransform.SetSourceLandmarks(points[fixed])
-    self.thinPlateTransform.SetTargetLandmarks(points[moving])
-    self.thinPlateTransform.Update()
-    self.resliceThroughTransform(moving,self.thinPlateTransform, fixed, transformed)
 
   def run(self,inputVolume,outputVolume):
     """
