@@ -60,7 +60,6 @@ class VisualizationWidget(RegistrationLib.pqWidget):
     checkBox.checked = False
     checkBox.connect('toggled(bool)', self.revealToggled)
     layout.addWidget(checkBox)
-    self.volumeDisplayCheckboxes[volume] = checkBox
     self.groupBoxLayout.addRow("Display", checkboxHolder)
 
     #
