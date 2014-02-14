@@ -445,6 +445,87 @@ class LandmarkRegistrationWidget:
     print ("clicked")
     print(self.landmarksWidget.selectedLandmark)
 
+    # Loop over pairs of fiducials
+    #     Crop images around the fiducial
+    #     Affine registration of the cropped images
+    #     Transform the fiducial using the transformation
+    fixedVolume = self.volumeSelectors["Fixed"].currentNode()
+    movingVolume = self.volumeSelectors["Moving"].currentNode()
+
+    volumesList = (fixedVolume,movingVolume)
+    landmarks = self.logic.landmarksForVolumes(volumesList)
+
+    cropLogic = slicer.modules.cropvolume.logic()
+    cvpn = slicer.vtkMRMLCropVolumeParametersNode()
+    point = [0,]*3
+
+    transform = slicer.vtkMRMLLinearTransformNode()
+    slicer.mrmlScene.AddNode(transform)
+    matrix = vtk.vtkMatrix4x4()
+
+    for landmarkName in landmarks.keys():
+      (fixedFiducial, movingFiducial) = landmarks[landmarkName]
+
+      (fixedList,fixedIndex) = fixedFiducial
+      (movingList, movingIndex) = movingFiducial
+
+      # define an roi for the fixed
+      roiFixed = slicer.vtkMRMLAnnotationROINode()
+      slicer.mrmlScene.AddNode(roiFixed)
+
+      fixedList.GetNthFiducialPosition(fixedIndex,point)
+      roiFixed.SetXYZ(point)
+      roiFixed.SetRadiusXYZ(30, 30, 30)
+
+      # crop the fixed
+      cvpn.SetROINodeID( roiFixed.GetID() )
+      cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
+      cropLogic.Apply( cvpn )
+      croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+
+      # define an roi for the moving
+      roiMoving = slicer.vtkMRMLAnnotationROINode()
+      slicer.mrmlScene.AddNode(roiMoving)
+
+      movingList.GetNthFiducialPosition(movingIndex,point)
+      roiMoving.SetXYZ(point)
+      roiMoving.SetRadiusXYZ(30, 30, 30)
+
+      #crop the moving
+      cvpn.SetROINodeID( roiMoving.GetID() )
+      cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
+      cropLogic.Apply( cvpn )
+      croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+
+      # register the ROIs
+      parameters = {}
+      parameters['FixedImageFileName'] = croppedFixedVolume.GetID()
+      parameters['MovingImageFileName'] = croppedMovingVolume.GetID()
+      parameters['OutputTransform'] = transform.GetID()
+
+      slicer.cli.run(slicer.modules.affineregistration, None, parameters, wait_for_completion=True)
+
+      # apply the local transform to the landmark
+      transform.GetMatrixTransformToWorld(matrix)
+      matrix.Invert()
+      tp = matrix.MultiplyPoint(point + [1,])
+
+      movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
+
+      # clean up cropped volmes, need to reset the foreground/background display before we delete it
+      self.visualizationWidget.updateVisualization()
+      slicer.app.processEvents()
+      slicer.mrmlScene.RemoveNode(croppedFixedVolume)
+      slicer.mrmlScene.RemoveNode(croppedMovingVolume)
+
+      # remove rois
+      # TODO: causes a crash
+      #qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi))
+      #qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi))
+
+    # clean up the transform
+    slicer.mrmlScene.RemoveNode(transform)
+
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
