@@ -173,6 +173,17 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
+    # placeholder for landmark refinement
+    # TODO: move this to a dedicated refinement class
+    #
+    refineButton = qt.QPushButton()
+    refineButton.text = 'Refine Selected Landmark'
+    refineButton.toolTip = 'Refine the currently selected landmark based on local registration'
+    refineButton.connect('clicked()', self.onRefineClicked)
+    parametersFormLayout.addRow(refineButton)
+
+
+    #
     # Registration Options
     #
     self.registrationCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -429,6 +440,10 @@ class LandmarkRegistrationWidget:
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
                   if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
                     displayNode.SetVisibility(False)
+
+  def onRefineClicked(self):
+    print ("clicked")
+    print(self.landmarksWidget.selectedLandmark)
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
