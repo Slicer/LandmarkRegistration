@@ -897,6 +897,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     dtiBrain = sampleDataLogic.downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
 
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
     w = slicer.modules.LandmarkRegistrationWidget
     w.volumeSelectors["Fixed"].setCurrentNode(dtiBrain)
     w.volumeSelectors["Moving"].setCurrentNode(mrHead)
@@ -938,6 +941,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     pre,post = sampleDataLogic.downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
     w = slicer.modules.LandmarkRegistrationWidget
     w.setupDialog()
     w.volumeDialogSelectors["Fixed"].setCurrentNode(post)
@@ -957,6 +963,10 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.test_LandmarkRegistrationAffine()
 
     self.delayDisplay('starting test_LandmarkRegistrationThinPlate')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
     w = slicer.modules.LandmarkRegistrationWidget
     pre = w.volumeSelectors["Fixed"].currentNode()
     post = w.volumeSelectors["Moving"].currentNode()
