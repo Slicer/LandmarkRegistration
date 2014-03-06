@@ -777,22 +777,25 @@ class LandmarkRegistrationLogic:
               addedLandmark = addedFiducial
     return addedLandmark
 
-  def vtkPointForVolumes(self, volumeNodes, fiducialNodes):
+  def vtkPointsForVolumes(self, volumeNodes, fiducialNodes):
     """Return dictionary of vtkPoints instances containing the fiducial points
     associated with current landmarks, indexed by volume"""
     points = {}
-    point = [0,]*3
     for volumeNode in volumeNodes:
       points[volumeNode] = vtk.vtkPoints()
-    ficucialCount = fiducialNodes[0].GetNumberOfFiducials()
-    for fiducialNode in fiducialNodes:
-      if ficucialCount != fiducialNode.GetNumberOfFiducials():
-        raise Exception("Fiducial counts don't match {0}".format(ficucialCount))
-    indices = range(ficucialCount)
-    for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
-      for index in indices:
-        fiducials.GetNthFiducialPosition(index,point)
-        points[volumeNode].InsertNextPoint(point)
+    sameNumberOfNodes = len(volumeNodes) == len(fiducialNodes) 
+    noNoneNodes = None not in volumeNodes and None not in fiducialNodes
+    if sameNumberOfNodes and noNoneNodes:
+      fiducialCount = fiducialNodes[0].GetNumberOfFiducials()
+      for fiducialNode in fiducialNodes:
+        if fiducialCount != fiducialNode.GetNumberOfFiducials():
+          raise Exception("Fiducial counts don't match {0}".format(fiducialCount))
+      point = [0,]*3
+      indices = range(fiducialCount)
+      for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
+        for index in indices:
+          fiducials.GetNthFiducialPosition(index,point)
+          points[volumeNode].InsertNextPoint(point)
     return points
 
   def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):

@@ -95,7 +95,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
 
     volumeNodes = (state.fixed, state.moving)
     fiducialNodes = (state.fixedFiducials,state.movingFiducials)
-    points = state.logic.vtkPointForVolumes( volumeNodes, fiducialNodes )
+    points = state.logic.vtkPointsForVolumes( volumeNodes, fiducialNodes )
 
     # since this is a resample transform, source is the fixed (resampling target) space
     # and moving is the target space

@@ -118,7 +118,7 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
 
     volumeNodes = (state.fixed, state.moving)
     fiducialNodes = (state.fixedFiducials,state.movingFiducials)
-    points = state.logic.vtkPointForVolumes( volumeNodes, fiducialNodes )
+    points = state.logic.vtkPointsForVolumes( volumeNodes, fiducialNodes )
     landmarkTransform.SetSourceLandmarks(points[state.moving])
     landmarkTransform.SetTargetLandmarks(points[state.fixed])
     landmarkTransform.Update()
