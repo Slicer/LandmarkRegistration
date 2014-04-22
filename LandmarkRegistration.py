@@ -822,7 +822,10 @@ class LandmarkRegistrationLogic:
     self.reslice.SetInterpolationModeToLinear()
     self.reslice.InterpolateOn()
     self.reslice.SetResliceTransform(self.resliceTransform)
-    self.reslice.SetInput( sourceNode.GetImageData() )
+    if vtk.VTK_MAJOR_VERSION <= 5:
+      self.reslice.SetInput( sourceNode.GetImageData() )
+    else:
+      self.reslice.SetInputConnection( sourceNode.GetImageDataConnection() )
 
     dimensions = referenceNode.GetImageData().GetDimensions()
     self.reslice.SetOutputExtent(0, dimensions[0]-1, 0, dimensions[1]-1, 0, dimensions[2]-1)
