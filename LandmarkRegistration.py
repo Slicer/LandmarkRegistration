@@ -698,8 +698,12 @@ class LandmarkRegistrationLogic:
     """Make sure the fiducial list associated with the given
     volume node contains a fiducial named landmarkName and that it
     is associated with volumeNode.  If it does not have one, add one
-    and put it at landmarkPosition."""
+    and put it at landmarkPosition.
+    Returns landmarkName if a new one is created, otherwise none
+    """
     fiducialList = self.volumeFiducialList(volumeNode)
+    if not fiducialList:
+      return None
     fiducialSize = fiducialList.GetNumberOfMarkups()
     for fiducialIndex in range(fiducialSize):
       if fiducialList.GetNthFiducialLabel(fiducialIndex) == landmarkName:
