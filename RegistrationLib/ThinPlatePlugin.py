@@ -79,6 +79,10 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     """Called when the user changes a landmark"""
     pass
 
+  def onLandmarkEndMoving(self,state):
+    """Called when the user changes a landmark"""
+    self.onThinPlateApply()
+
   def onThinPlateApply(self):
     """Call this whenever thin plate needs to be calculated"""
     state = self.registationState()

@@ -89,3 +89,8 @@ class RegistrationPlugin(object):
     """Called when the user changes a landmark"""
     print(state)
     pass
+
+  def onLandmarkEndMoving(self,state):
+    """Called when the user changes a landmark"""
+    print(state)
+    pass

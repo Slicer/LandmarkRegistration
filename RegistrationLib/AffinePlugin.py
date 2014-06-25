@@ -123,7 +123,7 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     landmarkTransform.SetTargetLandmarks(points[state.fixed])
     landmarkTransform.Update()
     t = state.linearTransform
-    t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
+    t.SetMatrixTransformToParent(landmarkTransform.GetMatrix())
 
 
   def onLinearTransform(self):

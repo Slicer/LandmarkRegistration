@@ -84,6 +84,9 @@ class LandmarksWidget(RegistrationLib.pqWidget):
               fiducialList.PointModifiedEvent, lambda caller,event: self.onFiducialMoved(caller))
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
+              fiducialList.PointEndInteractionEvent, lambda caller,event: self.onFiducialEndMoving(caller))
+      self.observerTags.append( (fiducialList,tag) )
+      tag = fiducialList.AddObserver(
               fiducialList.MarkupAddedEvent, self.requestNodeAddedUpdate)
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
@@ -101,6 +104,16 @@ class LandmarksWidget(RegistrationLib.pqWidget):
       landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
       self.pickLandmark(landmarkName,clearMovingView=False)
       self.emit("landmarkMoved(landmarkName)", (landmarkName,))
+
+  def onFiducialEndMoving(self,fiducialList):
+    """Callback when fiducialList's point is done moving."""
+    movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
+    print ('onFiducialEndMoving', fiducialList, movingIndexAttribute)
+    if movingIndexAttribute:
+      movingIndex = int(movingIndexAttribute)
+      landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+      self.pickLandmark(landmarkName,clearMovingView=False)
+      self.emit("landmarkEndMoving(landmarkName)", (landmarkName,))
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""

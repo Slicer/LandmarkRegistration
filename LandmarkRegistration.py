@@ -170,6 +170,7 @@ class LandmarkRegistrationWidget:
     self.landmarksWidget = RegistrationLib.LandmarksWidget(self.logic)
     self.landmarksWidget.connect("landmarkPicked(landmarkName)", self.onLandmarkPicked)
     self.landmarksWidget.connect("landmarkMoved(landmarkName)", self.onLandmarkMoved)
+    self.landmarksWidget.connect("landmarkEndMoving(landmarkName)", self.onLandmarkEndMoving)
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
@@ -457,6 +458,12 @@ class LandmarkRegistrationWidget:
       state = self.registationState()
       self.currentRegistrationInterface.onLandmarkMoved(state)
 
+  def onLandmarkEndMoving(self,landmarkName):
+    """Called when a landmark is done being moved (e.g. when mouse button released)"""
+    if self.currentRegistrationInterface:
+      state = self.registationState()
+      self.currentRegistrationInterface.onLandmarkEndMoving(state)
+
   def onReload(self,moduleName="LandmarkRegistration"):
     """Generic reload method for any scripted module.
     ModuleWizard will subsitute correct default moduleName.
@@ -671,6 +678,8 @@ class LandmarkRegistrationLogic:
   def volumeFiducialList(self,volumeNode):
     """return fiducial list node that is
     list associated with the given volume node"""
+    if not volumeNode:
+      return None
     listName = volumeNode.GetName() + "-landmarks"
     return slicer.util.getNode(listName)
 
