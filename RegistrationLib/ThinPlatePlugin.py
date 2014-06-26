@@ -94,7 +94,6 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   def performThinPlateRegistration(self, state, landmarks):
     """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
 
-    print('performing thin plate registration')
     state.transformed.SetAndObserveTransformNodeID(None)
 
     volumeNodes = (state.fixed, state.moving)

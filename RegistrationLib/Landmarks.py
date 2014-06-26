@@ -108,7 +108,6 @@ class LandmarksWidget(RegistrationLib.pqWidget):
   def onFiducialEndMoving(self,fiducialList):
     """Callback when fiducialList's point is done moving."""
     movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
-    print ('onFiducialEndMoving', fiducialList, movingIndexAttribute)
     if movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
       landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
