@@ -142,18 +142,18 @@ class LandmarkRegistrationWidget:
     self.volumeSelectors["Transformed"].selectNodeUponCreation = True
     self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
 
-    self.linearTransformSelector = slicer.qMRMLNodeComboBox()
-    self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
-    self.linearTransformSelector.selectNodeUponCreation = True
-    self.linearTransformSelector.addEnabled = True
-    self.linearTransformSelector.removeEnabled = True
-    self.linearTransformSelector.noneEnabled = True
-    self.linearTransformSelector.showHidden = False
-    self.linearTransformSelector.showChildNodeTypes = False
-    self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
-    self.linearTransformSelector.setToolTip( "The transform for linear registration" )
-    self.linearTransformSelector.enabled = False
-    parametersFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
+    self.transformSelector = slicer.qMRMLNodeComboBox()
+    self.transformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
+    self.transformSelector.selectNodeUponCreation = True
+    self.transformSelector.addEnabled = True
+    self.transformSelector.removeEnabled = True
+    self.transformSelector.noneEnabled = True
+    self.transformSelector.showHidden = False
+    self.transformSelector.showChildNodeTypes = False
+    self.transformSelector.setMRMLScene( slicer.mrmlScene )
+    self.transformSelector.setToolTip( "The transform for linear registration" )
+    self.transformSelector.enabled = False
+    parametersFormLayout.addRow("Target Transform ", self.transformSelector)
 
     #
     # Visualization Widget
@@ -280,10 +280,10 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
       # create transform and transformed if needed
-      transform = self.linearTransformSelector.currentNode()
+      transform = self.transformSelector.currentNode()
       if not transform:
-        self.linearTransformSelector.addNode()
-        transform = self.linearTransformSelector.currentNode()
+        self.transformSelector.addNode()
+        transform = self.transformSelector.currentNode()
       transformed = self.volumeSelectors['Transformed'].currentNode()
       if not transformed:
         volumesLogic = slicer.modules.volumes.logic()
@@ -332,7 +332,7 @@ class LandmarkRegistrationWidget:
     state.fixedFiducials = self.logic.volumeFiducialList(state.fixed)
     state.movingFiducials = self.logic.volumeFiducialList(state.moving)
     state.transformedFiducials = self.logic.volumeFiducialList(state.transformed)
-    state.linearTransform = self.linearTransformSelector.currentNode()
+    state.transform = self.transformSelector.currentNode()
     return(state)
 
   def currentVolumeNodes(self):
@@ -395,6 +395,7 @@ class LandmarkRegistrationWidget:
       self.currentRegistrationInterface.destroy()
     interfaceClass = slicer.modules.registrationPlugins[pickedRegistrationType]
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
+    # argument registationState is a callable that gets current state
     self.currentRegistrationInterface.create(self.registationState)
 
   def updateSliceNodesByVolumeID(self):
