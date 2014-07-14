@@ -102,21 +102,15 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     extent[::2] = [0,]*3
     extent[1::2] = samples
 
-    print(rasBounds)
-    print(origin)
-    print(maxes)
-    print(boundSize)
-    print(samples)
-    print(extent)
-
     toGrid = vtk.vtkTransformToGrid()
     toGrid.SetGridOrigin(origin)
     toGrid.SetGridSpacing(state.fixed.GetSpacing())
     toGrid.SetGridExtent(extent)
-    toGrid.SetInput(state.transform.GetTransformFromParent())
+    if vtk.VTK_MAJOR_VERSION <= 5:
+      toGrid.SetInput(state.transform.GetTransformFromParent())
+    else:
+      toGrid.SetInputData(state.transform.GetTransformFromParent())
     toGrid.Update()
-
-    print(toGrid.GetOutput())
 
     gridTransform = vtk.vtkGridTransform()
     gridTransform.SetDisplacementGrid(toGrid.GetOutput())
