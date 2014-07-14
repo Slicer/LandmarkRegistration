@@ -51,6 +51,8 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   def __init__(self,parent=None):
     super(ThinPlatePlugin,self).__init__(parent)
 
+    self.thinPlateTransform = None
+
   def create(self,registationState):
     """Make the plugin-specific user interface"""
     super(ThinPlatePlugin,self).create(registationState)
@@ -63,21 +65,70 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     self.thinPlateCollapsibleButton.setLayout(thinPlateFormLayout)
     self.widgets.append(self.thinPlateCollapsibleButton)
 
-    self.thinPlateApply = qt.QPushButton("Apply")
-    self.thinPlateApply.connect('clicked(bool)', self.onThinPlateApply)
-    thinPlateFormLayout.addWidget(self.thinPlateApply)
-    self.widgets.append(self.thinPlateApply)
+    self.hotUpdateButton = qt.QCheckBox("Hot Update")
+    thinPlateFormLayout.addWidget(self.hotUpdateButton)
+    self.widgets.append(self.hotUpdateButton)
+
+    self.exportGridButton = qt.QPushButton("Export to Grid Transform")
+    self.exportGridButton.toolTip = "To save this transform or use it in other Slicer modules you can export the current Thin Plate transform to a Grid Transform."
+    thinPlateFormLayout.addWidget(self.exportGridButton)
+    self.exportGridButton.connect("clicked()",self.onExportGrid)
+    self.widgets.append(self.exportGridButton)
 
     self.parent.layout().addWidget(self.thinPlateCollapsibleButton)
-
 
   def destroy(self):
     """Clean up"""
     super(ThinPlatePlugin,self).destroy()
 
+  def onExportGrid(self):
+    """Converts the current thin plate transform to a grid"""
+    state = self.registationState()
+
+    # since the transform is ras-to-ras, we find the extreme points
+    # in ras space of the fixed (target) volume and fix the unoriented
+    # box around it.  Sample the grid transform at the resolution of
+    # the fixed volume, which may be a bit overkill but it should aways
+    # work without too much loss.
+    rasBounds = [0,]*6
+    state.fixed.GetRASBounds(rasBounds)
+    from math import floor, ceil
+    origin = map(int,map(floor,rasBounds[::2]))
+    maxes = map(int,map(ceil,rasBounds[1::2]))
+    boundSize = [m - o for m,o in zip(maxes,origin) ]
+    spacing = state.fixed.GetSpacing()
+    samples = [ceil(b / s) for b,s in zip(boundSize,spacing)]
+    extent = [0,]*6
+    extent[::2] = [0,]*3
+    extent[1::2] = samples
+
+    print(rasBounds)
+    print(origin)
+    print(maxes)
+    print(boundSize)
+    print(samples)
+    print(extent)
+
+    toGrid = vtk.vtkTransformToGrid()
+    toGrid.SetGridOrigin(origin)
+    toGrid.SetGridSpacing(state.fixed.GetSpacing())
+    toGrid.SetGridExtent(extent)
+    toGrid.SetInput(state.transform.GetTransformFromParent())
+    toGrid.Update()
+
+    print(toGrid.GetOutput())
+
+    gridTransform = vtk.vtkGridTransform()
+    gridTransform.SetDisplacementGrid(toGrid.GetOutput())
+    gridNode = slicer.vtkMRMLGridTransformNode()
+    gridNode.SetAndObserveTransformFromParent(gridTransform)
+    gridNode.SetName(state.transform.GetName()+"-grid")
+    slicer.mrmlScene.AddNode(gridNode)
+
   def onLandmarkMoved(self,state):
     """Called when the user changes a landmark"""
-    pass
+    if self.hotUpdateButton.checked:
+      self.onThinPlateApply()
 
   def onLandmarkEndMoving(self,state):
     """Called when the user changes a landmark"""
@@ -94,20 +145,23 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
   def performThinPlateRegistration(self, state, landmarks):
     """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
 
-    state.transformed.SetAndObserveTransformNodeID(None)
-
     volumeNodes = (state.fixed, state.moving)
     fiducialNodes = (state.fixedFiducials,state.movingFiducials)
     points = state.logic.vtkPointsForVolumes( volumeNodes, fiducialNodes )
 
     # since this is a resample transform, source is the fixed (resampling target) space
     # and moving is the target space
-    self.thinPlateTransform = vtk.vtkThinPlateSplineTransform()
+    if not self.thinPlateTransform:
+      self.thinPlateTransform = vtk.vtkThinPlateSplineTransform()
     self.thinPlateTransform.SetBasisToR() # for 3D transform
-    self.thinPlateTransform.SetSourceLandmarks(points[state.fixed])
-    self.thinPlateTransform.SetTargetLandmarks(points[state.moving])
+    self.thinPlateTransform.SetSourceLandmarks(points[state.moving])
+    self.thinPlateTransform.SetTargetLandmarks(points[state.fixed])
     self.thinPlateTransform.Update()
-    state.logic.resliceThroughTransform(state.moving, self.thinPlateTransform, state.fixed, state.transformed)
+
+    if points[state.moving].GetNumberOfPoints() != points[state.fixed].GetNumberOfPoints():
+      raise hell
+
+    state.transform.SetAndObserveTransformToParent(self.thinPlateTransform)
 
 
 # Add this plugin to the dictionary of available registrations.

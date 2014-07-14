@@ -143,7 +143,7 @@ class LandmarkRegistrationWidget:
     self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
 
     self.transformSelector = slicer.qMRMLNodeComboBox()
-    self.transformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
+    self.transformSelector.nodeTypes = ( ("vtkMRMLTransformNode"), "" )
     self.transformSelector.selectNodeUponCreation = True
     self.transformSelector.addEnabled = True
     self.transformSelector.removeEnabled = True
@@ -292,6 +292,7 @@ class LandmarkRegistrationWidget:
         transformed = slicer.util.getNode(transformedName)
         if not transformed:
           transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+        transformed.SetAndObserveTransformNodeID(transform.GetID())
       self.volumeSelectors['Transformed'].setCurrentNode(transformed)
       self.onLayout()
       self.interfaceFrame.enabled = True
@@ -812,53 +813,6 @@ class LandmarkRegistrationLogic:
           points[volumeNode].InsertNextPoint(point)
     return points
 
-  def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
-    """
-    Fills the targetNode's vtkImageData with the source after
-    applying the transform.  Uses spacing from referenceNode. Ignores any vtkMRMLTransforms.
-    sourceNode, referenceNode, targetNode: vtkMRMLScalarVolumeNodes
-    transform: vtkAbstractTransform
-    """
-
-    # get the transform from RAS back to source pixel space
-    sourceRASToIJK = vtk.vtkMatrix4x4()
-    sourceNode.GetRASToIJKMatrix(sourceRASToIJK)
-
-    # get the transform from target image space to RAS
-    referenceIJKToRAS = vtk.vtkMatrix4x4()
-    targetNode.GetIJKToRASMatrix(referenceIJKToRAS)
-
-    # this is the ijkToRAS concatenated with the passed in (abstract)transform
-    self.resliceTransform = vtk.vtkGeneralTransform()
-    self.resliceTransform.Concatenate(sourceRASToIJK)
-    self.resliceTransform.Concatenate(transform)
-    self.resliceTransform.Concatenate(referenceIJKToRAS)
-
-    # use the matrix to extract the volume and convert it to an array
-    self.reslice = vtk.vtkImageReslice()
-    self.reslice.SetInterpolationModeToLinear()
-    self.reslice.InterpolateOn()
-    self.reslice.SetResliceTransform(self.resliceTransform)
-    if vtk.VTK_MAJOR_VERSION <= 5:
-      self.reslice.SetInput( sourceNode.GetImageData() )
-    else:
-      self.reslice.SetInputConnection( sourceNode.GetImageDataConnection() )
-
-    dimensions = referenceNode.GetImageData().GetDimensions()
-    self.reslice.SetOutputExtent(0, dimensions[0]-1, 0, dimensions[1]-1, 0, dimensions[2]-1)
-    self.reslice.SetOutputOrigin((0,0,0))
-    self.reslice.SetOutputSpacing((1,1,1))
-
-    self.reslice.UpdateWholeExtent()
-    targetNode.SetAndObserveImageData(self.reslice.GetOutput())
-
-
-  def run(self,inputVolume,outputVolume):
-    """
-    Run the actual algorithm
-    """
-    return True
-
 
 class LandmarkRegistrationTest(unittest.TestCase):
   """
@@ -1019,7 +973,11 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.landmarksWidget.pickLandmark('L-4')
     w.onRegistrationType("ThinPlate")
 
+    self.delayDisplay('Applying transform')
     w.currentRegistrationInterface.onThinPlateApply()
+
+    self.delayDisplay('Exporting as a grid node')
+    w.currentRegistrationInterface.onExportGrid()
 
     self.delayDisplay('test_LandmarkRegistrationThinPlate passed!')
 
