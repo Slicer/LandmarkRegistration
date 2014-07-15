@@ -101,6 +101,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     extent = [0,]*6
     extent[::2] = [0,]*3
     extent[1::2] = samples
+    extent = map(int,extent)
 
     toGrid = vtk.vtkTransformToGrid()
     toGrid.SetGridOrigin(origin)
