@@ -107,10 +107,7 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
     toGrid.SetGridOrigin(origin)
     toGrid.SetGridSpacing(state.fixed.GetSpacing())
     toGrid.SetGridExtent(extent)
-    if vtk.VTK_MAJOR_VERSION <= 5:
-      toGrid.SetInput(state.transform.GetTransformFromParent())
-    else:
-      toGrid.SetInputData(state.transform.GetTransformFromParent())
+    toGrid.SetInput(state.transform.GetTransformFromParent()) # same in VTKv 5 & 6
     toGrid.Update()
 
     gridTransform = vtk.vtkGridTransform()
