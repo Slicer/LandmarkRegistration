@@ -12,6 +12,7 @@ class VisualizationWidget(RegistrationLib.pqWidget):
     self.rockCount = 0
     self.rocking = False
     self.rockTimer = None
+    self.flickerTimer = None
     self.logic = logic
     self.revealCursor = None
     self.volumes = ("Fixed", "Moving", "Transformed",)
@@ -66,21 +67,37 @@ class VisualizationWidget(RegistrationLib.pqWidget):
     # fade slider
     #
     fadeHolder = qt.QWidget()
-    layout = qt.QHBoxLayout()
-    fadeHolder.setLayout(layout)
+    fadeLayout = qt.QHBoxLayout()
+    fadeHolder.setLayout(fadeLayout)
     self.fadeSlider = ctk.ctkSliderWidget()
     self.fadeSlider.minimum = 0
     self.fadeSlider.maximum = 1.0
     self.fadeSlider.value = 0.5
     self.fadeSlider.singleStep = 0.05
     self.fadeSlider.connect('valueChanged(double)', self.onFadeChanged)
-    layout.addWidget(self.fadeSlider)
+    fadeLayout.addWidget(self.fadeSlider)
+
+    #
+    # Rock and Flicker
+    #
+    animaHolder = qt.QWidget()
+    animaLayout = qt.QVBoxLayout()
+    animaHolder.setLayout(animaLayout)
+    fadeLayout.addWidget(animaHolder)
+    # Rock
     checkBox = qt.QCheckBox()
     checkBox.text = "Rock"
     checkBox.checked = False
     checkBox.connect('toggled(bool)', self.onRockToggled)
-    layout.addWidget(checkBox)
-    self.groupBoxLayout.addRow("Cross Fade", fadeHolder)
+    animaLayout.addWidget(checkBox)
+    # Flicker
+    checkBox = qt.QCheckBox()
+    checkBox.text = "Flicker"
+    checkBox.checked = False
+    checkBox.connect('toggled(bool)', self.onFlickerToggled)
+    animaLayout.addWidget(checkBox)
+
+    self.groupBoxLayout.addRow("Fade", fadeHolder)
 
     #
     # zoom control
@@ -129,10 +146,11 @@ class VisualizationWidget(RegistrationLib.pqWidget):
   def rock(self):
     if not self.rocking:
       self.rockTimer = None
+      self.fadeSlider.value = 0.5
     if self.rocking:
       if not self.rockTimer:
         self.rockTimer = qt.QTimer()
-        self.rockTimer.start(100)
+        self.rockTimer.start(50)
         self.rockTimer.connect('timeout()', self.rock)
       import math
       self.fadeSlider.value = 0.5 + math.sin(self.rockCount / 10. ) / 2.
@@ -141,6 +159,23 @@ class VisualizationWidget(RegistrationLib.pqWidget):
   def onRockToggled(self,checked):
     self.rocking = checked
     self.rock()
+
+  def flicker(self):
+    if not self.flickering:
+      self.flickerTimer = None
+    if self.flickering:
+      if not self.flickerTimer:
+        if self.fadeSlider.value == 0.5:
+          self.fadeSlider.value = 0.25
+        self.flickerTimer = qt.QTimer()
+        self.flickerTimer.start(300)
+        self.flickerTimer.connect('timeout()', self.flicker)
+      import math
+      self.fadeSlider.value = 1.0 - self.fadeSlider.value
+
+  def onFlickerToggled(self,checked):
+    self.flickering = checked
+    self.flicker()
 
   def onZoom(self,zoomFactor):
     import CompareVolumes
