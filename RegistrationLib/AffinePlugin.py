@@ -111,8 +111,7 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     landmarkTransform.SetSourceLandmarks(points[state.moving])
     landmarkTransform.SetTargetLandmarks(points[state.fixed])
     landmarkTransform.Update()
-    t = state.transform
-    t.SetMatrixTransformToParent(landmarkTransform.GetMatrix())
+    state.transform.SetAndObserveTransformToParent(landmarkTransform)
 
   def onLinearTransform(self,mode):
     state = self.registationState()
