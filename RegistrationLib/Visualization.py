@@ -163,6 +163,7 @@ class VisualizationWidget(RegistrationLib.pqWidget):
   def flicker(self):
     if not self.flickering:
       self.flickerTimer = None
+      self.fadeSlider.value = 0.5
     if self.flickering:
       if not self.flickerTimer:
         if self.fadeSlider.value == 0.5:
