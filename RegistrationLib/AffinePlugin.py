@@ -94,6 +94,9 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
       if state.transformed.GetTransformNodeID() != state.transform.GetID():
         state.transformed.SetAndObserveTransformNodeID(state.transform.GetID())
 
+    if not state.fixedFiducials or not state.movingFiducials:
+      return
+
     # try to use user selection, but fall back if not enough points are available
     landmarkTransform = vtk.vtkLandmarkTransform()
     if self.linearMode == 'Rigid':
