@@ -50,6 +50,7 @@ class LandmarkRegistrationWidget:
   """The module GUI widget"""
   def __init__(self, parent = None):
     self.logic = LandmarkRegistrationLogic()
+    self.logic.registationState = self.registationState
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
@@ -651,11 +652,15 @@ class LandmarkRegistrationLogic:
       markupsLogic.SetActiveListID(originalActiveList)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
-  def addLandmark(self,volumeNodes=[], position=(0,0,0)):
+  def addLandmark(self,volumeNodes=[], position=(0,0,0), movingPosition=(0,0,0)):
     """Add a new landmark by adding correspondingly named
     fiducials to all the current volume nodes.
     Find a unique name for the landmark and place it at the origin.
+    As a special case if the fiducial list corresponds to the
+    moving volume in the current state, then assign the movingPosition
+    (this way it can account for the current transform).
     """
+    state = self.registationState()
     landmarks = self.landmarksForVolumes(volumeNodes)
     index = 0
     while True:
@@ -664,7 +669,12 @@ class LandmarkRegistrationLogic:
         break
       index += 1
     for volumeNode in volumeNodes:
-      fiducial = self.addFiducial(landmarkName, position=position,associatedNode=volumeNode)
+      # if the volume is the moving on, map position through transform to world
+      if volumeNode == state.moving:
+        positionToAdd = movingPosition
+      else:
+        positionToAdd = position
+      fiducial = self.addFiducial(landmarkName, position=positionToAdd, associatedNode=volumeNode)
     return landmarkName
 
   def removeLandmarkForVolumes(self,landmark,volumeNodes):
@@ -734,6 +744,7 @@ class LandmarkRegistrationLogic:
     Add the fiducial as a landmark and delete it from the other list.
     Return the name of the last added landmark if it exists.
     """
+    state = self.registationState()
     addedLandmark = None
     volumeNodeIDs = []
     for volumeNode in volumeNodes:
@@ -752,11 +763,29 @@ class LandmarkRegistrationLogic:
         # associated with one of our volumes
         fiducialSize = fiducialList.GetNumberOfMarkups()
         for fiducialIndex in range(fiducialSize):
-          associated = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
-          if fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex) in volumeNodeIDs:
+          associatedID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
+          if associatedID in volumeNodeIDs:
             # found one, so add it as a landmark
             landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
-            addedLandmark = self.addLandmark(volumeNodes,landmarkPosition)
+            volumeNode = slicer.util.getNode(associatedID)
+            # if new fiducial is associated with moving volume,
+            # then map the position back to where it would have been
+            # if it were not transformed, if not, then calculate where
+            # the point would be on the moving volume
+            movingPosition = [0.,]*3
+            volumeTransformNode = state.transformed.GetParentTransformNode()
+            volumeTransform = vtk.vtkGeneralTransform()
+            if volumeTransformNode:
+              if volumeNode == state.moving:
+                # in this case, moving stays and other point moves
+                volumeTransformNode.GetTransformToWorld(volumeTransform)
+                movingPosition[:] = landmarkPosition
+                volumeTransform.TransformPoint(movingPosition,landmarkPosition)
+              else:
+                # in this case, landmark stays and moving point moves
+                volumeTransformNode.GetTransformFromWorld(volumeTransform)
+                volumeTransform.TransformPoint(landmarkPosition,movingPosition)
+            addedLandmark = self.addLandmark(volumeNodes,landmarkPosition,movingPosition)
             listIndexToRemove.insert(0,(fiducialList,fiducialIndex))
     for fiducialList,fiducialIndex in listIndexToRemove:
       fiducialList.RemoveMarkup(fiducialIndex)
