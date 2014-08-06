@@ -640,6 +640,15 @@ class LandmarkRegistrationLogic:
         break
 
     if not foundLandmarkFiducial:
+      if associatedNode:
+        # clip point to min/max bounds of target volume
+        rasBounds = [0,]*6
+        associatedNode.GetRASBounds(rasBounds)
+        for i in range(3):
+          if position[i] < rasBounds[2*i]:
+            position[i] = rasBounds[2*i]
+          if position[i] > rasBounds[2*i+1]:
+            position[i] = rasBounds[2*i+1]
       fiducialList.AddFiducial(*position)
       fiducialIndex = fiducialList.GetNumberOfFiducials()-1
 
