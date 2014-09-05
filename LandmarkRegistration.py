@@ -101,7 +101,7 @@ class LandmarkRegistrationWidget:
       self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
       # reload and run specific tests
-      scenarios = ("Basic", "Affine", "ThinPlate")
+      scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
@@ -313,6 +313,7 @@ class LandmarkRegistrationWidget:
        to the currently active registration method.
     """
     tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarksWidget.requestNodeAddedUpdate)
+    self.observerTags.append( (slicer.mrmlScene, tag) )
     tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeRemovedEvent, self.landmarksWidget.requestNodeAddedUpdate)
     self.observerTags.append( (slicer.mrmlScene, tag) )
 
@@ -417,12 +418,16 @@ class LandmarkRegistrationWidget:
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
-    for the volume on which they were defined"""
+    for the volume on which they were defined.
+    Also turn off other fiducial lists, since leaving
+    them visible can interfere with picking."""
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
+      activeFiducialLists = []
       for landmarkName in landmarks:
         for fiducialList,index in landmarks[landmarkName]:
+          activeFiducialLists.append(fiducialList)
           displayNode = fiducialList.GetDisplayNode()
           displayNode.RemoveAllViewNodeIDs()
           volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
@@ -433,6 +438,13 @@ class LandmarkRegistrationWidget:
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
                   if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
                     displayNode.SetVisibility(False)
+      allFiducialLists = slicer.util.getNodes('vtkMRMLMarkupsFiducial*').values()
+      for fiducialList in allFiducialLists:
+        if fiducialList not in activeFiducialLists:
+          displayNode = fiducialList.GetDisplayNode()
+          displayNode.SetVisibility(False)
+          displayNode.RemoveAllViewNodeIDs()
+          displayNode.AddViewNodeID("__invalid_view_id__")
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -836,7 +848,7 @@ class LandmarkRegistrationLogic:
     points = {}
     for volumeNode in volumeNodes:
       points[volumeNode] = vtk.vtkPoints()
-    sameNumberOfNodes = len(volumeNodes) == len(fiducialNodes) 
+    sameNumberOfNodes = len(volumeNodes) == len(fiducialNodes)
     noNoneNodes = None not in volumeNodes and None not in fiducialNodes
     if sameNumberOfNodes and noNoneNodes:
       fiducialCount = fiducialNodes[0].GetNumberOfFiducials()
@@ -874,6 +886,67 @@ class LandmarkRegistrationTest(unittest.TestCase):
     qt.QTimer.singleShot(msec, self.info.close)
     self.info.exec_()
 
+  def clickAndDrag(self,widget,button='Left',start=(10,10),end=(10,40),steps=20,modifiers=[]):
+    """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
+    button : "Left", "Middle", "Right", or "None"
+    start, end : window coordinates for action
+    steps : number of steps to move in
+    modifiers : list containing zero or more of "Shift" or "Control"
+    """
+    style = widget.interactorStyle()
+    interator = style.GetInteractor()
+    if button == 'Left':
+      down = style.OnLeftButtonDown
+      up = style.OnLeftButtonUp
+    elif button == 'Right':
+      down = style.OnRightButtonDown
+      up = style.OnRightButtonUp
+    elif button == 'Middle':
+      down = style.OnMiddleButtonDown
+      up = style.OnMiddleButtonUp
+    elif button == 'None' or not button:
+      down = lambda : None
+      up = lambda : None
+    else:
+      raise Exception("Bad button - should be Left or Right, not %s" % button)
+    if 'Shift' in modifiers:
+      interator.SetShiftKey(1)
+    if 'Control' in modifiers:
+      interator.SetControlKey(1)
+    interator.SetEventPosition(*start)
+    down()
+    for step in xrange(steps):
+      frac = float(step+1)/steps
+      x = int(start[0] + frac*(end[0]-start[0]))
+      y = int(start[1] + frac*(end[1]-start[1]))
+      interator.SetEventPosition(x,y)
+      style.OnMouseMove()
+    up()
+    interator.SetShiftKey(0)
+    interator.SetControlKey(0)
+
+  def moveMouse(self,widget,start=(10,10),end=(10,40),steps=20,modifiers=[]):
+    """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
+    start, end : window coordinates for action
+    steps : number of steps to move in
+    modifiers : list containing zero or more of "Shift" or "Control"
+    """
+    style = widget.interactorStyle()
+    interator = style.GetInteractor()
+    if 'Shift' in modifiers:
+      interator.SetShiftKey(1)
+    if 'Control' in modifiers:
+      interator.SetControlKey(1)
+    interator.SetEventPosition(*start)
+    for step in xrange(steps):
+      frac = float(step+1)/steps
+      x = int(start[0] + frac*(end[0]-start[0]))
+      y = int(start[1] + frac*(end[1]-start[1]))
+      interator.SetEventPosition(x,y)
+      style.OnMouseMove()
+    interator.SetShiftKey(0)
+    interator.SetControlKey(0)
+
   def setUp(self):
     """ Do whatever is needed to reset the state - typically a scene clear will be enough.
     """
@@ -889,6 +962,8 @@ class LandmarkRegistrationTest(unittest.TestCase):
       self.test_LandmarkRegistrationAffine()
     elif scenario == "ThinPlate":
       self.test_LandmarkRegistrationThinPlate()
+    elif scenario == "VTKv6Picking":
+      self.test_LandmarkRegistrationVTKv6Picking()
     else:
       self.test_LandmarkRegistrationBasic()
       self.test_LandmarkRegistrationAffine()
@@ -1019,3 +1094,90 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
     self.delayDisplay('test_LandmarkRegistrationThinPlate passed!')
 
+
+  def test_LandmarkRegistrationVTKv6Picking(self):
+    """Test the picking situation on VTKv6"""
+
+    self.delayDisplay('starting test_LandmarkRegistrationVTKv6Picking')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
+
+    #
+    # first, get some data
+    #
+    import SampleData
+    sampleDataLogic = SampleData.SampleDataLogic()
+
+    dataSource = SampleData.SampleDataSource('fixed', 'http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', 'fixed.nrrd', 'fixed')
+    fixed = sampleDataLogic.downloadFromSource(dataSource)[0]
+
+    dataSource = SampleData.SampleDataSource('moving', 'http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', 'moving.nrrd', 'moving')
+    moving = sampleDataLogic.downloadFromSource(dataSource)[0]
+
+    self.delayDisplay('Two data sets loaded')
+
+    w = slicer.modules.LandmarkRegistrationWidget
+    w.setupDialog()
+
+    w.volumeDialogSelectors["Fixed"].setCurrentNode(fixed)
+    w.volumeDialogSelectors["Moving"].setCurrentNode(moving)
+    w.onVolumeDialogApply()
+
+    # to help debug picking manager, set some variables that
+    # can be accessed via the python console.
+    self.delayDisplay('setting widget variables')
+    w.lm = slicer.app.layoutManager()
+    w.fa = w.lm.sliceWidget('fixed-Axial')
+    w.fav = w.fa.sliceView()
+    w.favrw = w.fav.renderWindow()
+    w.favi = w.fav.interactor()
+    w.favpm = w.favi.GetPickingManager()
+    w.rens = w.favrw.GetRenderers()
+    w.ren = w.rens.GetItemAsObject(0)
+    w.cam = w.ren.GetActiveCamera()
+    print(w.favpm)
+
+    logic = LandmarkRegistrationLogic()
+
+    # initiate registration
+    w.registrationTypeButtons["ThinPlate"].checked = True
+    w.registrationTypeButtons["ThinPlate"].clicked()
+
+    # enter picking mode
+    w.landmarksWidget.addLandmark()
+
+    # move the mouse to the middle of the widget so that the first
+    # mouse move event will be exactly over the fiducial to simplify
+    # breakpoints in mouse move callbacks.
+    layoutManager = slicer.app.layoutManager()
+    fixedAxialView = layoutManager.sliceWidget('fixed-Axial').sliceView()
+    center = (fixedAxialView.width/2, fixedAxialView.height/2)
+    offset = map(lambda element: element+100, center)
+    self.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
+    self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
+
+    self.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
+    self.delayDisplay('dragged to translate', 200)
+    self.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
+    self.delayDisplay('translate back', 200)
+
+
+    globalPoint = fixedAxialView.mapToGlobal(qt.QPoint(*center))
+    qt.QCursor().setPos(globalPoint)
+    self.delayDisplay('moved to %s' % globalPoint, 200 )
+
+    offset = map(lambda element: element+10, center)
+    globalPoint = fixedAxialView.mapToGlobal(qt.QPoint(*offset))
+    if False:
+      # move the cursor
+      qt.QCursor().setPos(globalPoint)
+    else:
+      # generate the event
+      mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
+      fixedAxialView.VTKWidget().mouseMoveEvent(mouseEvent)
+
+    self.delayDisplay('moved to %s' % globalPoint, 200 )
+
+    self.delayDisplay('test_LandmarkRegistrationVTKv6Picking passed!')

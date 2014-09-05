@@ -185,7 +185,7 @@ class LandmarksWidget(RegistrationLib.pqWidget):
   def nodeAddedUpdate(self):
     """Perform the update of any new fiducials.
     First collect from any fiducial lists not associated with one of our
-    lists (like when the process first gets started) and then check for
+    volumes (like when the process first gets started) and then check for
     new fiducials added to one of our lists.
     End result should be one fiducial per list with identical names and
     correctly assigned associated node ids.
@@ -193,6 +193,7 @@ class LandmarksWidget(RegistrationLib.pqWidget):
     """
     if self.updatingFiducials:
       return
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     self.updatingFiducials = True
     addedAssociatedLandmark = self.logic.collectAssociatedFiducials(self.volumeNodes)
     addedLandmark = self.logic.landmarksFromFiducials(self.volumeNodes)
@@ -204,4 +205,5 @@ class LandmarksWidget(RegistrationLib.pqWidget):
     self.updateLandmarkArray()
     self.pendingUpdate = False
     self.updatingFiducials = False
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
