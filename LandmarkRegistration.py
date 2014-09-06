@@ -1,4 +1,4 @@
-import os
+import os, string
 import unittest
 from __main__ import vtk, qt, ctk, slicer
 
@@ -14,18 +14,26 @@ class LandmarkRegistration:
     parent.categories = ["Registration"]
     parent.dependencies = []
     parent.contributors = ["Steve Pieper (Isomics)"] # replace with "Firstname Lastname (Org)"
-    parent.helpText = """
+    parent.helpText = string.Template("""
     This module organizes a fixed and moving volume along with a set of corresponding
     landmarks (paired fiducials) to assist in manual registration.
-    """
+
+Please refer to <a href=\"$a/Documentation/$b.$c/Modules/LandmarkRegistration\"> the documentation</a>.
+
+    """).substitute({ 'a':parent.slicerWikiUrl, 'b':slicer.app.majorVersion, 'c':slicer.app.minorVersion })
     parent.acknowledgementText = """
-    This file was developed by Steve Pieper, Isomics, Inc.
-    It was partially funded by NIH grant 3P41RR013218-12S1
-    and this work is part of the National Alliance for Medical Image
-    Computing (NAMIC), funded by the National Institutes of Health
+    This file was originally developed by Steve Pieper, Isomics, Inc.
+    It was partially funded by NIH grant 3P41RR013218-12S1 and P41 EB015902 the
+    Neuroimage Analysis Center (NAC) a Biomedical Technology Resource Center supported
+    by the National Institute of Biomedical Imaging and Bioengineering (NIBIB).
+    And this work is part of the "National Alliance for Medical Image
+    Computing" (NAMIC), funded by the National Institutes of Health
     through the NIH Roadmap for Medical Research, Grant U54 EB005149.
     Information on the National Centers for Biomedical Computing
     can be obtained from http://nihroadmap.nih.gov/bioinformatics.
+    This work is also supported by NIH grant 1R01DE024450-01A1
+    "Quantification of 3D Bony Changes in Temporomandibular Joint Osteoarthritis"
+    (TMJ-OA).
     """ # replace with organization, grant and thanks.
     self.parent = parent
 
@@ -49,6 +57,8 @@ class LandmarkRegistration:
 class LandmarkRegistrationWidget:
   """The module GUI widget"""
   def __init__(self, parent = None):
+    settings = qt.QSettings()
+    self.developerMode = settings.value('Developer/DeveloperMode').lower() == 'true'
     self.logic = LandmarkRegistrationLogic()
     self.logic.registationState = self.registationState
     self.sliceNodesByViewName = {}
@@ -72,10 +82,10 @@ class LandmarkRegistrationWidget:
   def setup(self):
     """Instantiate and connect widgets ..."""
 
-    #
-    # Reload and Test area
-    #
-    if True:
+    if self.developerMode:
+      #
+      # Reload and Test area
+      #
       """Developer interface"""
       reloadCollapsibleButton = ctk.ctkCollapsibleButton()
       reloadCollapsibleButton.text = "Advanced - Reload && Test"
