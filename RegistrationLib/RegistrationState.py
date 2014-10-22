@@ -19,5 +19,5 @@ class RegistrationState(object):
   transformedFiducials = None
 
   # MRML Linear Transform Node
-  linearTransform = None
+  transform = None
 

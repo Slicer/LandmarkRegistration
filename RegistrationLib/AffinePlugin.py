@@ -54,6 +54,9 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
   def create(self,registationState):
     """Make the plugin-specific user interface"""
     super(AffinePlugin,self).create(registationState)
+
+    self.linearMode = "Rigid"
+
     #
     # Linear Registration Pane - initially hidden
     # - interface options for linear registration
@@ -74,22 +77,9 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
       self.linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
       buttonLayout.addWidget(self.linearModeButtons[mode])
       self.widgets.append(self.linearModeButtons[mode])
-      self.linearModeButtons[mode].connect('clicked(bool)', self.onLinearTransform)
-    #self.linearModeButtons[self.logic.linearMode].checked = True
+      self.linearModeButtons[mode].connect('clicked()', lambda m=mode : self.onLinearTransform(m))
+    self.linearModeButtons[self.linearMode].checked = True
     linearFormLayout.addRow("Registration Mode ", buttonLayout)
-
-    if False:
-      self.linearTransformSelector = slicer.qMRMLNodeComboBox()
-      self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
-      self.linearTransformSelector.selectNodeUponCreation = True
-      self.linearTransformSelector.addEnabled = True
-      self.linearTransformSelector.removeEnabled = True
-      self.linearTransformSelector.noneEnabled = True
-      self.linearTransformSelector.showHidden = False
-      self.linearTransformSelector.showChildNodeTypes = False
-      self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
-      self.linearTransformSelector.setToolTip( "Pick the transform for linear registration" )
-      linearFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
 
     self.parent.layout().addWidget(self.linearCollapsibleButton)
 
@@ -100,10 +90,12 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
 
   def onLandmarkMoved(self,state):
     """Perform the linear transform using the vtkLandmarkTransform class"""
-    if state.transformed.GetTransformNodeID() != state.linearTransform.GetID():
-      state.transformed.SetAndObserveTransformNodeID(state.linearTransform.GetID())
+    if state.transformed:
+      if state.transformed.GetTransformNodeID() != state.transform.GetID():
+        state.transformed.SetAndObserveTransformNodeID(state.transform.GetID())
 
-    self.linearMode = "Rigid"
+    if not state.fixedFiducials or not state.movingFiducials:
+      return
 
     # try to use user selection, but fall back if not enough points are available
     landmarkTransform = vtk.vtkLandmarkTransform()
@@ -118,16 +110,16 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
 
     volumeNodes = (state.fixed, state.moving)
     fiducialNodes = (state.fixedFiducials,state.movingFiducials)
-    points = state.logic.vtkPointForVolumes( volumeNodes, fiducialNodes )
+    points = state.logic.vtkPointsForVolumes( volumeNodes, fiducialNodes )
     landmarkTransform.SetSourceLandmarks(points[state.moving])
     landmarkTransform.SetTargetLandmarks(points[state.fixed])
     landmarkTransform.Update()
-    t = state.linearTransform
-    t.SetAndObserveMatrixTransformToParent(landmarkTransform.GetMatrix())
+    state.transform.SetAndObserveTransformToParent(landmarkTransform)
 
-
-  def onLinearTransform(self):
-    pass
+  def onLinearTransform(self,mode):
+    state = self.registationState()
+    self.linearMode = mode
+    self.onLandmarkMoved(state)
 
 
 

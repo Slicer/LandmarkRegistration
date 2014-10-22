@@ -84,6 +84,9 @@ class LandmarksWidget(RegistrationLib.pqWidget):
               fiducialList.PointModifiedEvent, lambda caller,event: self.onFiducialMoved(caller))
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
+              fiducialList.PointEndInteractionEvent, lambda caller,event: self.onFiducialEndMoving(caller))
+      self.observerTags.append( (fiducialList,tag) )
+      tag = fiducialList.AddObserver(
               fiducialList.MarkupAddedEvent, self.requestNodeAddedUpdate)
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
@@ -101,6 +104,15 @@ class LandmarksWidget(RegistrationLib.pqWidget):
       landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
       self.pickLandmark(landmarkName,clearMovingView=False)
       self.emit("landmarkMoved(landmarkName)", (landmarkName,))
+
+  def onFiducialEndMoving(self,fiducialList):
+    """Callback when fiducialList's point is done moving."""
+    movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
+    if movingIndexAttribute:
+      movingIndex = int(movingIndexAttribute)
+      landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+      self.pickLandmark(landmarkName,clearMovingView=False)
+      self.emit("landmarkEndMoving(landmarkName)", (landmarkName,))
 
   def removeLandmarkObservers(self):
     """Remove any existing observers"""
@@ -173,7 +185,7 @@ class LandmarksWidget(RegistrationLib.pqWidget):
   def nodeAddedUpdate(self):
     """Perform the update of any new fiducials.
     First collect from any fiducial lists not associated with one of our
-    lists (like when the process first gets started) and then check for
+    volumes (like when the process first gets started) and then check for
     new fiducials added to one of our lists.
     End result should be one fiducial per list with identical names and
     correctly assigned associated node ids.
@@ -181,6 +193,7 @@ class LandmarksWidget(RegistrationLib.pqWidget):
     """
     if self.updatingFiducials:
       return
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     self.updatingFiducials = True
     addedAssociatedLandmark = self.logic.collectAssociatedFiducials(self.volumeNodes)
     addedLandmark = self.logic.landmarksFromFiducials(self.volumeNodes)
@@ -192,4 +205,5 @@ class LandmarksWidget(RegistrationLib.pqWidget):
     self.updateLandmarkArray()
     self.pendingUpdate = False
     self.updatingFiducials = False
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 

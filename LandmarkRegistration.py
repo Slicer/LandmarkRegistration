@@ -1,4 +1,4 @@
-import os
+import os, string
 import unittest
 from __main__ import vtk, qt, ctk, slicer
 
@@ -14,18 +14,26 @@ class LandmarkRegistration:
     parent.categories = ["Registration"]
     parent.dependencies = []
     parent.contributors = ["Steve Pieper (Isomics)"] # replace with "Firstname Lastname (Org)"
-    parent.helpText = """
+    parent.helpText = string.Template("""
     This module organizes a fixed and moving volume along with a set of corresponding
     landmarks (paired fiducials) to assist in manual registration.
-    """
+
+Please refer to <a href=\"$a/Documentation/$b.$c/Modules/LandmarkRegistration\"> the documentation</a>.
+
+    """).substitute({ 'a':parent.slicerWikiUrl, 'b':slicer.app.majorVersion, 'c':slicer.app.minorVersion })
     parent.acknowledgementText = """
-    This file was developed by Steve Pieper, Isomics, Inc.
-    It was partially funded by NIH grant 3P41RR013218-12S1
-    and this work is part of the National Alliance for Medical Image
-    Computing (NAMIC), funded by the National Institutes of Health
+    This file was originally developed by Steve Pieper, Isomics, Inc.
+    It was partially funded by NIH grant 3P41RR013218-12S1 and P41 EB015902 the
+    Neuroimage Analysis Center (NAC) a Biomedical Technology Resource Center supported
+    by the National Institute of Biomedical Imaging and Bioengineering (NIBIB).
+    And this work is part of the "National Alliance for Medical Image
+    Computing" (NAMIC), funded by the National Institutes of Health
     through the NIH Roadmap for Medical Research, Grant U54 EB005149.
     Information on the National Centers for Biomedical Computing
     can be obtained from http://nihroadmap.nih.gov/bioinformatics.
+    This work is also supported by NIH grant 1R01DE024450-01A1
+    "Quantification of 3D Bony Changes in Temporomandibular Joint Osteoarthritis"
+    (TMJ-OA).
     """ # replace with organization, grant and thanks.
     self.parent = parent
 
@@ -49,7 +57,10 @@ class LandmarkRegistration:
 class LandmarkRegistrationWidget:
   """The module GUI widget"""
   def __init__(self, parent = None):
+    settings = qt.QSettings()
+    self.developerMode = settings.value('Developer/DeveloperMode').lower() == 'true'
     self.logic = LandmarkRegistrationLogic()
+    self.logic.registationState = self.registationState
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
@@ -71,10 +82,10 @@ class LandmarkRegistrationWidget:
   def setup(self):
     """Instantiate and connect widgets ..."""
 
-    #
-    # Reload and Test area
-    #
-    if True:
+    if self.developerMode:
+      #
+      # Reload and Test area
+      #
       """Developer interface"""
       reloadCollapsibleButton = ctk.ctkCollapsibleButton()
       reloadCollapsibleButton.text = "Advanced - Reload && Test"
@@ -100,7 +111,7 @@ class LandmarkRegistrationWidget:
       self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
       # reload and run specific tests
-      scenarios = ("Basic", "Affine", "ThinPlate")
+      scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
@@ -142,18 +153,18 @@ class LandmarkRegistrationWidget:
     self.volumeSelectors["Transformed"].selectNodeUponCreation = True
     self.volumeSelectors["Transformed"].setToolTip( "Pick the transformed volume, which is the target for the registration." )
 
-    self.linearTransformSelector = slicer.qMRMLNodeComboBox()
-    self.linearTransformSelector.nodeTypes = ( ("vtkMRMLLinearTransformNode"), "" )
-    self.linearTransformSelector.selectNodeUponCreation = True
-    self.linearTransformSelector.addEnabled = True
-    self.linearTransformSelector.removeEnabled = True
-    self.linearTransformSelector.noneEnabled = True
-    self.linearTransformSelector.showHidden = False
-    self.linearTransformSelector.showChildNodeTypes = False
-    self.linearTransformSelector.setMRMLScene( slicer.mrmlScene )
-    self.linearTransformSelector.setToolTip( "The transform for linear registration" )
-    self.linearTransformSelector.enabled = False
-    parametersFormLayout.addRow("Target Linear Transform ", self.linearTransformSelector)
+    self.transformSelector = slicer.qMRMLNodeComboBox()
+    self.transformSelector.nodeTypes = ( ("vtkMRMLTransformNode"), "" )
+    self.transformSelector.selectNodeUponCreation = True
+    self.transformSelector.addEnabled = True
+    self.transformSelector.removeEnabled = True
+    self.transformSelector.noneEnabled = True
+    self.transformSelector.showHidden = False
+    self.transformSelector.showChildNodeTypes = False
+    self.transformSelector.setMRMLScene( slicer.mrmlScene )
+    self.transformSelector.setToolTip( "The transform for linear registration" )
+    self.transformSelector.enabled = False
+    parametersFormLayout.addRow("Target Transform ", self.transformSelector)
 
     #
     # Visualization Widget
@@ -170,6 +181,7 @@ class LandmarkRegistrationWidget:
     self.landmarksWidget = RegistrationLib.LandmarksWidget(self.logic)
     self.landmarksWidget.connect("landmarkPicked(landmarkName)", self.onLandmarkPicked)
     self.landmarksWidget.connect("landmarkMoved(landmarkName)", self.onLandmarkMoved)
+    self.landmarksWidget.connect("landmarkEndMoving(landmarkName)", self.onLandmarkEndMoving)
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
@@ -290,10 +302,10 @@ class LandmarkRegistrationWidget:
       self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
       # create transform and transformed if needed
-      transform = self.linearTransformSelector.currentNode()
+      transform = self.transformSelector.currentNode()
       if not transform:
-        self.linearTransformSelector.addNode()
-        transform = self.linearTransformSelector.currentNode()
+        self.transformSelector.addNode()
+        transform = self.transformSelector.currentNode()
       transformed = self.volumeSelectors['Transformed'].currentNode()
       if not transformed:
         volumesLogic = slicer.modules.volumes.logic()
@@ -302,6 +314,7 @@ class LandmarkRegistrationWidget:
         transformed = slicer.util.getNode(transformedName)
         if not transformed:
           transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
+        transformed.SetAndObserveTransformNodeID(transform.GetID())
       self.volumeSelectors['Transformed'].setCurrentNode(transformed)
       self.onLayout()
       self.interfaceFrame.enabled = True
@@ -321,6 +334,7 @@ class LandmarkRegistrationWidget:
        to the currently active registration method.
     """
     tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.landmarksWidget.requestNodeAddedUpdate)
+    self.observerTags.append( (slicer.mrmlScene, tag) )
     tag = slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeRemovedEvent, self.landmarksWidget.requestNodeAddedUpdate)
     self.observerTags.append( (slicer.mrmlScene, tag) )
 
@@ -342,7 +356,7 @@ class LandmarkRegistrationWidget:
     state.fixedFiducials = self.logic.volumeFiducialList(state.fixed)
     state.movingFiducials = self.logic.volumeFiducialList(state.moving)
     state.transformedFiducials = self.logic.volumeFiducialList(state.transformed)
-    state.linearTransform = self.linearTransformSelector.currentNode()
+    state.transform = self.transformSelector.currentNode()
     return(state)
 
   def currentVolumeNodes(self):
@@ -405,6 +419,7 @@ class LandmarkRegistrationWidget:
       self.currentRegistrationInterface.destroy()
     interfaceClass = slicer.modules.registrationPlugins[pickedRegistrationType]
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
+    # argument registationState is a callable that gets current state
     self.currentRegistrationInterface.create(self.registationState)
 
   def updateSliceNodesByVolumeID(self):
@@ -424,12 +439,16 @@ class LandmarkRegistrationWidget:
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
-    for the volume on which they were defined"""
+    for the volume on which they were defined.
+    Also turn off other fiducial lists, since leaving
+    them visible can interfere with picking."""
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
+      activeFiducialLists = []
       for landmarkName in landmarks:
         for fiducialList,index in landmarks[landmarkName]:
+          activeFiducialLists.append(fiducialList)
           displayNode = fiducialList.GetDisplayNode()
           displayNode.RemoveAllViewNodeIDs()
           volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
@@ -440,6 +459,13 @@ class LandmarkRegistrationWidget:
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
                   if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
                     displayNode.SetVisibility(False)
+      allFiducialLists = slicer.util.getNodes('vtkMRMLMarkupsFiducial*').values()
+      for fiducialList in allFiducialLists:
+        if fiducialList not in activeFiducialLists:
+          displayNode = fiducialList.GetDisplayNode()
+          displayNode.SetVisibility(False)
+          displayNode.RemoveAllViewNodeIDs()
+          displayNode.AddViewNodeID("__invalid_view_id__")
 
   def onRefineClicked(self):
     print ("clicked")
@@ -552,6 +578,12 @@ class LandmarkRegistrationWidget:
     if self.currentRegistrationInterface:
       state = self.registationState()
       self.currentRegistrationInterface.onLandmarkMoved(state)
+
+  def onLandmarkEndMoving(self,landmarkName):
+    """Called when a landmark is done being moved (e.g. when mouse button released)"""
+    if self.currentRegistrationInterface:
+      state = self.registationState()
+      self.currentRegistrationInterface.onLandmarkEndMoving(state)
 
   def onReload(self,moduleName="LandmarkRegistration"):
     """Generic reload method for any scripted module.
@@ -726,6 +758,15 @@ class LandmarkRegistrationLogic:
         break
 
     if not foundLandmarkFiducial:
+      if associatedNode:
+        # clip point to min/max bounds of target volume
+        rasBounds = [0,]*6
+        associatedNode.GetRASBounds(rasBounds)
+        for i in range(3):
+          if position[i] < rasBounds[2*i]:
+            position[i] = rasBounds[2*i]
+          if position[i] > rasBounds[2*i+1]:
+            position[i] = rasBounds[2*i+1]
       fiducialList.AddFiducial(*position)
       fiducialIndex = fiducialList.GetNumberOfFiducials()-1
 
@@ -738,11 +779,15 @@ class LandmarkRegistrationLogic:
       markupsLogic.SetActiveListID(originalActiveList)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
-  def addLandmark(self,volumeNodes=[], position=(0,0,0)):
+  def addLandmark(self,volumeNodes=[], position=(0,0,0), movingPosition=(0,0,0)):
     """Add a new landmark by adding correspondingly named
     fiducials to all the current volume nodes.
     Find a unique name for the landmark and place it at the origin.
+    As a special case if the fiducial list corresponds to the
+    moving volume in the current state, then assign the movingPosition
+    (this way it can account for the current transform).
     """
+    state = self.registationState()
     landmarks = self.landmarksForVolumes(volumeNodes)
     index = 0
     while True:
@@ -751,7 +796,12 @@ class LandmarkRegistrationLogic:
         break
       index += 1
     for volumeNode in volumeNodes:
-      fiducial = self.addFiducial(landmarkName, position=position,associatedNode=volumeNode)
+      # if the volume is the moving on, map position through transform to world
+      if volumeNode == state.moving:
+        positionToAdd = movingPosition
+      else:
+        positionToAdd = position
+      fiducial = self.addFiducial(landmarkName, position=positionToAdd, associatedNode=volumeNode)
     return landmarkName
 
   def removeLandmarkForVolumes(self,landmark,volumeNodes):
@@ -767,6 +817,8 @@ class LandmarkRegistrationLogic:
   def volumeFiducialList(self,volumeNode):
     """return fiducial list node that is
     list associated with the given volume node"""
+    if not volumeNode:
+      return None
     listName = volumeNode.GetName() + "-landmarks"
     return slicer.util.getNode(listName)
 
@@ -794,8 +846,12 @@ class LandmarkRegistrationLogic:
     """Make sure the fiducial list associated with the given
     volume node contains a fiducial named landmarkName and that it
     is associated with volumeNode.  If it does not have one, add one
-    and put it at landmarkPosition."""
+    and put it at landmarkPosition.
+    Returns landmarkName if a new one is created, otherwise none
+    """
     fiducialList = self.volumeFiducialList(volumeNode)
+    if not fiducialList:
+      return None
     fiducialSize = fiducialList.GetNumberOfMarkups()
     for fiducialIndex in range(fiducialSize):
       if fiducialList.GetNthFiducialLabel(fiducialIndex) == landmarkName:
@@ -815,6 +871,7 @@ class LandmarkRegistrationLogic:
     Add the fiducial as a landmark and delete it from the other list.
     Return the name of the last added landmark if it exists.
     """
+    state = self.registationState()
     addedLandmark = None
     volumeNodeIDs = []
     for volumeNode in volumeNodes:
@@ -833,11 +890,29 @@ class LandmarkRegistrationLogic:
         # associated with one of our volumes
         fiducialSize = fiducialList.GetNumberOfMarkups()
         for fiducialIndex in range(fiducialSize):
-          associated = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
-          if fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex) in volumeNodeIDs:
+          associatedID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
+          if associatedID in volumeNodeIDs:
             # found one, so add it as a landmark
             landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
-            addedLandmark = self.addLandmark(volumeNodes,landmarkPosition)
+            volumeNode = slicer.util.getNode(associatedID)
+            # if new fiducial is associated with moving volume,
+            # then map the position back to where it would have been
+            # if it were not transformed, if not, then calculate where
+            # the point would be on the moving volume
+            movingPosition = [0.,]*3
+            volumeTransformNode = state.transformed.GetParentTransformNode()
+            volumeTransform = vtk.vtkGeneralTransform()
+            if volumeTransformNode:
+              if volumeNode == state.moving:
+                # in this case, moving stays and other point moves
+                volumeTransformNode.GetTransformToWorld(volumeTransform)
+                movingPosition[:] = landmarkPosition
+                volumeTransform.TransformPoint(movingPosition,landmarkPosition)
+              else:
+                # in this case, landmark stays and moving point moves
+                volumeTransformNode.GetTransformFromWorld(volumeTransform)
+                volumeTransform.TransformPoint(landmarkPosition,movingPosition)
+            addedLandmark = self.addLandmark(volumeNodes,landmarkPosition,movingPosition)
             listIndexToRemove.insert(0,(fiducialList,fiducialIndex))
     for fiducialList,fiducialIndex in listIndexToRemove:
       fiducialList.RemoveMarkup(fiducialIndex)
@@ -873,67 +948,26 @@ class LandmarkRegistrationLogic:
               addedLandmark = addedFiducial
     return addedLandmark
 
-  def vtkPointForVolumes(self, volumeNodes, fiducialNodes):
+  def vtkPointsForVolumes(self, volumeNodes, fiducialNodes):
     """Return dictionary of vtkPoints instances containing the fiducial points
     associated with current landmarks, indexed by volume"""
     points = {}
-    point = [0,]*3
     for volumeNode in volumeNodes:
       points[volumeNode] = vtk.vtkPoints()
-    ficucialCount = fiducialNodes[0].GetNumberOfFiducials()
-    for fiducialNode in fiducialNodes:
-      if ficucialCount != fiducialNode.GetNumberOfFiducials():
-        raise Exception("Fiducial counts don't match {0}".format(ficucialCount))
-    indices = range(ficucialCount)
-    for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
-      for index in indices:
-        fiducials.GetNthFiducialPosition(index,point)
-        points[volumeNode].InsertNextPoint(point)
+    sameNumberOfNodes = len(volumeNodes) == len(fiducialNodes)
+    noNoneNodes = None not in volumeNodes and None not in fiducialNodes
+    if sameNumberOfNodes and noNoneNodes:
+      fiducialCount = fiducialNodes[0].GetNumberOfFiducials()
+      for fiducialNode in fiducialNodes:
+        if fiducialCount != fiducialNode.GetNumberOfFiducials():
+          raise Exception("Fiducial counts don't match {0}".format(fiducialCount))
+      point = [0,]*3
+      indices = range(fiducialCount)
+      for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
+        for index in indices:
+          fiducials.GetNthFiducialPosition(index,point)
+          points[volumeNode].InsertNextPoint(point)
     return points
-
-  def resliceThroughTransform(self, sourceNode, transform, referenceNode, targetNode):
-    """
-    Fills the targetNode's vtkImageData with the source after
-    applying the transform.  Uses spacing from referenceNode. Ignores any vtkMRMLTransforms.
-    sourceNode, referenceNode, targetNode: vtkMRMLScalarVolumeNodes
-    transform: vtkAbstractTransform
-    """
-
-    # get the transform from RAS back to source pixel space
-    sourceRASToIJK = vtk.vtkMatrix4x4()
-    sourceNode.GetRASToIJKMatrix(sourceRASToIJK)
-
-    # get the transform from target image space to RAS
-    referenceIJKToRAS = vtk.vtkMatrix4x4()
-    targetNode.GetIJKToRASMatrix(referenceIJKToRAS)
-
-    # this is the ijkToRAS concatenated with the passed in (abstract)transform
-    self.resliceTransform = vtk.vtkGeneralTransform()
-    self.resliceTransform.Concatenate(sourceRASToIJK)
-    self.resliceTransform.Concatenate(transform)
-    self.resliceTransform.Concatenate(referenceIJKToRAS)
-
-    # use the matrix to extract the volume and convert it to an array
-    self.reslice = vtk.vtkImageReslice()
-    self.reslice.SetInterpolationModeToLinear()
-    self.reslice.InterpolateOn()
-    self.reslice.SetResliceTransform(self.resliceTransform)
-    self.reslice.SetInput( sourceNode.GetImageData() )
-
-    dimensions = referenceNode.GetImageData().GetDimensions()
-    self.reslice.SetOutputExtent(0, dimensions[0]-1, 0, dimensions[1]-1, 0, dimensions[2]-1)
-    self.reslice.SetOutputOrigin((0,0,0))
-    self.reslice.SetOutputSpacing((1,1,1))
-
-    self.reslice.UpdateWholeExtent()
-    targetNode.SetAndObserveImageData(self.reslice.GetOutput())
-
-
-  def run(self,inputVolume,outputVolume):
-    """
-    Run the actual algorithm
-    """
-    return True
 
 
 class LandmarkRegistrationTest(unittest.TestCase):
@@ -958,6 +992,67 @@ class LandmarkRegistrationTest(unittest.TestCase):
     qt.QTimer.singleShot(msec, self.info.close)
     self.info.exec_()
 
+  def clickAndDrag(self,widget,button='Left',start=(10,10),end=(10,40),steps=20,modifiers=[]):
+    """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
+    button : "Left", "Middle", "Right", or "None"
+    start, end : window coordinates for action
+    steps : number of steps to move in
+    modifiers : list containing zero or more of "Shift" or "Control"
+    """
+    style = widget.interactorStyle()
+    interator = style.GetInteractor()
+    if button == 'Left':
+      down = style.OnLeftButtonDown
+      up = style.OnLeftButtonUp
+    elif button == 'Right':
+      down = style.OnRightButtonDown
+      up = style.OnRightButtonUp
+    elif button == 'Middle':
+      down = style.OnMiddleButtonDown
+      up = style.OnMiddleButtonUp
+    elif button == 'None' or not button:
+      down = lambda : None
+      up = lambda : None
+    else:
+      raise Exception("Bad button - should be Left or Right, not %s" % button)
+    if 'Shift' in modifiers:
+      interator.SetShiftKey(1)
+    if 'Control' in modifiers:
+      interator.SetControlKey(1)
+    interator.SetEventPosition(*start)
+    down()
+    for step in xrange(steps):
+      frac = float(step+1)/steps
+      x = int(start[0] + frac*(end[0]-start[0]))
+      y = int(start[1] + frac*(end[1]-start[1]))
+      interator.SetEventPosition(x,y)
+      style.OnMouseMove()
+    up()
+    interator.SetShiftKey(0)
+    interator.SetControlKey(0)
+
+  def moveMouse(self,widget,start=(10,10),end=(10,40),steps=20,modifiers=[]):
+    """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
+    start, end : window coordinates for action
+    steps : number of steps to move in
+    modifiers : list containing zero or more of "Shift" or "Control"
+    """
+    style = widget.interactorStyle()
+    interator = style.GetInteractor()
+    if 'Shift' in modifiers:
+      interator.SetShiftKey(1)
+    if 'Control' in modifiers:
+      interator.SetControlKey(1)
+    interator.SetEventPosition(*start)
+    for step in xrange(steps):
+      frac = float(step+1)/steps
+      x = int(start[0] + frac*(end[0]-start[0]))
+      y = int(start[1] + frac*(end[1]-start[1]))
+      interator.SetEventPosition(x,y)
+      style.OnMouseMove()
+    interator.SetShiftKey(0)
+    interator.SetControlKey(0)
+
   def setUp(self):
     """ Do whatever is needed to reset the state - typically a scene clear will be enough.
     """
@@ -973,6 +1068,8 @@ class LandmarkRegistrationTest(unittest.TestCase):
       self.test_LandmarkRegistrationAffine()
     elif scenario == "ThinPlate":
       self.test_LandmarkRegistrationThinPlate()
+    elif scenario == "VTKv6Picking":
+      self.test_LandmarkRegistrationVTKv6Picking()
     else:
       self.test_LandmarkRegistrationBasic()
       self.test_LandmarkRegistrationAffine()
@@ -992,6 +1089,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     mrHead = sampleDataLogic.downloadMRHead()
     dtiBrain = sampleDataLogic.downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
 
     w = slicer.modules.LandmarkRegistrationWidget
     w.volumeSelectors["Fixed"].setCurrentNode(dtiBrain)
@@ -1034,6 +1134,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     pre,post = sampleDataLogic.downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
     w = slicer.modules.LandmarkRegistrationWidget
     w.setupDialog()
     w.volumeDialogSelectors["Fixed"].setCurrentNode(post)
@@ -1053,6 +1156,10 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.test_LandmarkRegistrationAffine()
 
     self.delayDisplay('starting test_LandmarkRegistrationThinPlate')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
     w = slicer.modules.LandmarkRegistrationWidget
     pre = w.volumeSelectors["Fixed"].currentNode()
     post = w.volumeSelectors["Moving"].currentNode()
@@ -1085,7 +1192,98 @@ class LandmarkRegistrationTest(unittest.TestCase):
     w.landmarksWidget.pickLandmark('L-4')
     w.onRegistrationType("ThinPlate")
 
+    self.delayDisplay('Applying transform')
     w.currentRegistrationInterface.onThinPlateApply()
+
+    self.delayDisplay('Exporting as a grid node')
+    w.currentRegistrationInterface.onExportGrid()
 
     self.delayDisplay('test_LandmarkRegistrationThinPlate passed!')
 
+
+  def test_LandmarkRegistrationVTKv6Picking(self):
+    """Test the picking situation on VTKv6"""
+
+    self.delayDisplay('starting test_LandmarkRegistrationVTKv6Picking')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
+
+    #
+    # first, get some data
+    #
+    import SampleData
+    sampleDataLogic = SampleData.SampleDataLogic()
+
+    dataSource = SampleData.SampleDataSource('fixed', 'http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', 'fixed.nrrd', 'fixed')
+    fixed = sampleDataLogic.downloadFromSource(dataSource)[0]
+
+    dataSource = SampleData.SampleDataSource('moving', 'http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', 'moving.nrrd', 'moving')
+    moving = sampleDataLogic.downloadFromSource(dataSource)[0]
+
+    self.delayDisplay('Two data sets loaded')
+
+    w = slicer.modules.LandmarkRegistrationWidget
+    w.setupDialog()
+
+    w.volumeDialogSelectors["Fixed"].setCurrentNode(fixed)
+    w.volumeDialogSelectors["Moving"].setCurrentNode(moving)
+    w.onVolumeDialogApply()
+
+    # to help debug picking manager, set some variables that
+    # can be accessed via the python console.
+    self.delayDisplay('setting widget variables')
+    w.lm = slicer.app.layoutManager()
+    w.fa = w.lm.sliceWidget('fixed-Axial')
+    w.fav = w.fa.sliceView()
+    w.favrw = w.fav.renderWindow()
+    w.favi = w.fav.interactor()
+    w.favpm = w.favi.GetPickingManager()
+    w.rens = w.favrw.GetRenderers()
+    w.ren = w.rens.GetItemAsObject(0)
+    w.cam = w.ren.GetActiveCamera()
+    print(w.favpm)
+
+    logic = LandmarkRegistrationLogic()
+
+    # initiate registration
+    w.registrationTypeButtons["ThinPlate"].checked = True
+    w.registrationTypeButtons["ThinPlate"].clicked()
+
+    # enter picking mode
+    w.landmarksWidget.addLandmark()
+
+    # move the mouse to the middle of the widget so that the first
+    # mouse move event will be exactly over the fiducial to simplify
+    # breakpoints in mouse move callbacks.
+    layoutManager = slicer.app.layoutManager()
+    fixedAxialView = layoutManager.sliceWidget('fixed-Axial').sliceView()
+    center = (fixedAxialView.width/2, fixedAxialView.height/2)
+    offset = map(lambda element: element+100, center)
+    self.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
+    self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
+
+    self.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
+    self.delayDisplay('dragged to translate', 200)
+    self.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
+    self.delayDisplay('translate back', 200)
+
+
+    globalPoint = fixedAxialView.mapToGlobal(qt.QPoint(*center))
+    qt.QCursor().setPos(globalPoint)
+    self.delayDisplay('moved to %s' % globalPoint, 200 )
+
+    offset = map(lambda element: element+10, center)
+    globalPoint = fixedAxialView.mapToGlobal(qt.QPoint(*offset))
+    if False:
+      # move the cursor
+      qt.QCursor().setPos(globalPoint)
+    else:
+      # generate the event
+      mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
+      fixedAxialView.VTKWidget().mouseMoveEvent(mouseEvent)
+
+    self.delayDisplay('moved to %s' % globalPoint, 200 )
+
+    self.delayDisplay('test_LandmarkRegistrationVTKv6Picking passed!')
