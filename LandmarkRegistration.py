@@ -188,11 +188,11 @@ class LandmarkRegistrationWidget:
     # placeholder for landmark refinement
     # TODO: move this to a dedicated refinement class
     #
-    refineButton = qt.QPushButton()
-    refineButton.text = 'Refine Selected Landmark'
-    refineButton.toolTip = 'Refine the currently selected landmark based on local registration'
-    refineButton.connect('clicked()', self.onRefineClicked)
-    parametersFormLayout.addRow(refineButton)
+    self.refineButton = qt.QPushButton()
+    self.refineButton.text = 'No landmark selected for refinement'
+    self.refineButton.toolTip = 'Refine the currently selected landmark based on local registration'
+    self.refineButton.connect('clicked()', self.onRefineClicked)
+    parametersFormLayout.addRow(self.refineButton)
 
 
     #
@@ -468,10 +468,9 @@ class LandmarkRegistrationWidget:
           displayNode.AddViewNodeID("__invalid_view_id__")
 
   def onRefineClicked(self):
-    print ("clicked")
-    print(self.landmarksWidget.selectedLandmark)
+    #print ("refining landmark " + self.landmarksWidget.selectedLandmark)
 
-    # Loop over pairs of fiducials
+    # Refine selected landmark, or if none, loop over all landmarks
     #     Crop images around the fiducial
     #     Affine registration of the cropped images
     #     Transform the fiducial using the transformation
@@ -483,13 +482,17 @@ class LandmarkRegistrationWidget:
 
     cropLogic = slicer.modules.cropvolume.logic()
     cvpn = slicer.vtkMRMLCropVolumeParametersNode()
-    point = [0,]*3
+    fixedPoint = [0,]*3
+    movingPoint = [0,]*3
 
-    transform = slicer.vtkMRMLLinearTransformNode()
-    slicer.mrmlScene.AddNode(transform)
-    matrix = vtk.vtkMatrix4x4()
+    if self.landmarksWidget.selectedLandmark != None :
+      landmarkNames = [self.landmarksWidget.selectedLandmark]
+    else :
+      landmarkNames = landmarks.keys()
 
-    for landmarkName in landmarks.keys():
+    for landmarkName in landmarkNames:
+      print ("refining landmark " + landmarkName)
+
       (fixedFiducial, movingFiducial) = landmarks[landmarkName]
 
       (fixedList,fixedIndex) = fixedFiducial
@@ -499,8 +502,8 @@ class LandmarkRegistrationWidget:
       roiFixed = slicer.vtkMRMLAnnotationROINode()
       slicer.mrmlScene.AddNode(roiFixed)
 
-      fixedList.GetNthFiducialPosition(fixedIndex,point)
-      roiFixed.SetXYZ(point)
+      fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
+      roiFixed.SetXYZ(fixedPoint)
       roiFixed.SetRadiusXYZ(30, 30, 30)
 
       # crop the fixed
@@ -513,9 +516,9 @@ class LandmarkRegistrationWidget:
       roiMoving = slicer.vtkMRMLAnnotationROINode()
       slicer.mrmlScene.AddNode(roiMoving)
 
-      movingList.GetNthFiducialPosition(movingIndex,point)
-      roiMoving.SetXYZ(point)
-      roiMoving.SetRadiusXYZ(30, 30, 30)
+      movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+      roiMoving.SetXYZ(movingPoint)
+      roiMoving.SetRadiusXYZ(90, 90, 90)
 
       #crop the moving
       cvpn.SetROINodeID( roiMoving.GetID() )
@@ -523,20 +526,32 @@ class LandmarkRegistrationWidget:
       cropLogic.Apply( cvpn )
       croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
+      #   
+      transform = slicer.vtkMRMLLinearTransformNode()
+      slicer.mrmlScene.AddNode(transform)
+      matrix = vtk.vtkMatrix4x4()
+
       # register the ROIs
       parameters = {}
-      parameters['FixedImageFileName'] = croppedFixedVolume.GetID()
-      parameters['MovingImageFileName'] = croppedMovingVolume.GetID()
-      parameters['OutputTransform'] = transform.GetID()
+      parameters['fixedVolume'] = croppedFixedVolume.GetID()
+      parameters['movingVolume'] = croppedMovingVolume.GetID()
+      parameters['linearTransform'] = transform.GetID()
+      parameters['useRigid'] = True
+      parameters['initializeTransformMode'] = 'useGeometryAlign';
+      parameters['samplingPercentage'] = 0.2
 
-      slicer.cli.run(slicer.modules.affineregistration, None, parameters, wait_for_completion=True)
+      slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
 
       # apply the local transform to the landmark
+      #print transform
       transform.GetMatrixTransformToWorld(matrix)
       matrix.Invert()
-      tp = matrix.MultiplyPoint(point + [1,])
+      tp = [0,]*4
+      tp = matrix.MultiplyPoint(fixedPoint + [1,])
+      #print fixedPoint, movingPoint, tp[:3]
 
       movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
+
 
       # clean up cropped volmes, need to reset the foreground/background display before we delete it
       self.visualizationWidget.updateVisualization()
@@ -546,11 +561,16 @@ class LandmarkRegistrationWidget:
 
       # remove rois
       # TODO: causes a crash
-      #qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi))
-      #qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi))
+      qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi) )
+      qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi) )
 
-    # clean up the transform
-    slicer.mrmlScene.RemoveNode(transform)
+      roiFixed = None
+      roiMoving = None
+
+      # clean up the transform
+      slicer.mrmlScene.RemoveNode(transform)
+      transform = None
+      matrix = None
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -570,6 +590,10 @@ class LandmarkRegistrationWidget:
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
             if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
+    if landmarkName != None :
+      self.refineButton.text = 'Refine landmark ' + landmarkName
+    else:
+      self.refineButton.text = 'No landmark selected for refinement'
 
   def onLandmarkMoved(self,landmarkName):
     """Called when a landmark is moved (probably through
