@@ -503,6 +503,7 @@ class LandmarkRegistrationWidget:
       (movingList, movingIndex) = movingFiducial
 
       # define an roi for the fixed
+      roiStart = time.time()
       roiFixed = slicer.vtkMRMLAnnotationROINode()
       slicer.mrmlScene.AddNode(roiFixed)
 
@@ -515,13 +516,15 @@ class LandmarkRegistrationWidget:
       # crop the fixed
       cvpn.SetROINodeID( roiFixed.GetID() )
       cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
+      roiEnd = time.time()
+
       cropStart = time.time()
       cropLogic.Apply( cvpn )
       cropEnd = time.time()
-      print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
       croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
       # define an roi for the moving
+      roi2Start = time.time()
       roiMoving = slicer.vtkMRMLAnnotationROINode()
       slicer.mrmlScene.AddNode(roiMoving)
 
@@ -534,11 +537,15 @@ class LandmarkRegistrationWidget:
       # crop the moving
       cvpn.SetROINodeID( roiMoving.GetID() )
       cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
-      cropStart = time.time()
+      roi2End = time.time()
+      crop2Start = time.time()
       cropLogic.Apply( cvpn )
-      cropEnd = time.time()
-      print 'Time to crop moving volume ' + str(cropEnd - cropStart) + ' seconds'
+      crop2End = time.time()
       croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+
+      print 'Time to set up ROIs was ' + str(roiEnd - roiStart + roi2End - roi2Start) + ' seconds'
+      print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
+      print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
 
       #   
       transform = slicer.vtkMRMLLinearTransformNode()
@@ -565,6 +572,7 @@ class LandmarkRegistrationWidget:
 
       # apply the local transform to the landmark
       #print transform
+      resultStart = time.time()
       transform.GetMatrixTransformToWorld(matrix)
       matrix.Invert()
       tp = [0,]*4
@@ -572,9 +580,12 @@ class LandmarkRegistrationWidget:
       #print fixedPoint, movingPoint, tp[:3]
 
       movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
+      resultEnd = time.time()
 
+      print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
 
       # clean up cropped volmes, need to reset the foreground/background display before we delete it
+      cleanUpStart = time.time()
       self.visualizationWidget.updateVisualization()
       slicer.app.processEvents()
       slicer.mrmlScene.RemoveNode(croppedFixedVolume)
@@ -593,6 +604,9 @@ class LandmarkRegistrationWidget:
       slicer.mrmlScene.RemoveNode(transform)
       transform = None
       matrix = None
+      cleanUpEnd = time.time()
+
+      print 'Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds'
 
       end = time.time() 
       print 'Refined landmark ' + landmarkName + ' in ' + str(end - start) + ' seconds'
