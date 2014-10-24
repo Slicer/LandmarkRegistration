@@ -492,12 +492,7 @@ class LandmarkRegistrationWidget:
     movingPoint = [0,]*3
 
     if self.landmarksWidget.selectedLandmark != None :
-      landmarkNames = [self.landmarksWidget.selectedLandmark]
-    else :
-      # do all the landmarks? or none of the landmarks? I am thinking none would be better.
-      landmarkNames = landmarks.keys()
-
-    for landmarkName in landmarkNames:
+      landmarkName = self.landmarksWidget.selectedLandmark
       print ("Refining landmark " + landmarkName)
       start = time.time()
 
