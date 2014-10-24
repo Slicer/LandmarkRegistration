@@ -483,6 +483,8 @@ class LandmarkRegistrationWidget:
 
     cropLogic = slicer.modules.cropvolume.logic()
     cvpn = slicer.vtkMRMLCropVolumeParametersNode()
+    cvpn.SetInterpolationMode(1)
+    cvpn.SetVoxelBased(1)
     fixedPoint = [0,]*3
     movingPoint = [0,]*3
 
@@ -513,7 +515,10 @@ class LandmarkRegistrationWidget:
       # crop the fixed
       cvpn.SetROINodeID( roiFixed.GetID() )
       cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
+      cropStart = time.time()
       cropLogic.Apply( cvpn )
+      cropEnd = time.time()
+      print 'Time to crop a fixed volume ' + str(cropEnd - cropStart) + ' seconds'
       croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
       # define an roi for the moving
@@ -529,7 +534,10 @@ class LandmarkRegistrationWidget:
       # crop the moving
       cvpn.SetROINodeID( roiMoving.GetID() )
       cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
+      cropStart = time.time()
       cropLogic.Apply( cvpn )
+      cropEnd = time.time()
+      print 'Time to crop a moving volume ' + str(cropEnd - cropStart) + ' seconds'
       croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
       #   
