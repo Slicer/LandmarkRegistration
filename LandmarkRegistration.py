@@ -587,18 +587,11 @@ class LandmarkRegistrationWidget:
       slicer.app.processEvents()
       slicer.mrmlScene.RemoveNode(croppedFixedVolume)
       slicer.mrmlScene.RemoveNode(croppedMovingVolume)
-
-      # remove rois
-      # TODO: causes a crash
-      #qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi) )
-      #qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi) )
       slicer.mrmlScene.RemoveNode(roiFixed) 
       slicer.mrmlScene.RemoveNode(roiMoving) 
+      slicer.mrmlScene.RemoveNode(transform)
       roiFixed = None
       roiMoving = None
-
-      # clean up the transform
-      slicer.mrmlScene.RemoveNode(transform)
       transform = None
       matrix = None
       if timing: cleanUpEnd = time.time()
