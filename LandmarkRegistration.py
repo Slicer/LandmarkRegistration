@@ -1,5 +1,6 @@
 import os, string
 import unittest
+import time
 from __main__ import vtk, qt, ctk, slicer
 
 import RegistrationLib
@@ -492,6 +493,7 @@ class LandmarkRegistrationWidget:
 
     for landmarkName in landmarkNames:
       print ("refining landmark " + landmarkName)
+      start = time.time()
 
       (fixedFiducial, movingFiducial) = landmarks[landmarkName]
 
@@ -505,6 +507,8 @@ class LandmarkRegistrationWidget:
       fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
       roiFixed.SetXYZ(fixedPoint)
       roiFixed.SetRadiusXYZ(30, 30, 30)
+      roiFixed.SelectableOff()
+      roiFixed.SetDisplayVisibility(0)
 
       # crop the fixed
       cvpn.SetROINodeID( roiFixed.GetID() )
@@ -518,9 +522,11 @@ class LandmarkRegistrationWidget:
 
       movingList.GetNthFiducialPosition(movingIndex,movingPoint)
       roiMoving.SetXYZ(movingPoint)
-      roiMoving.SetRadiusXYZ(90, 90, 90)
+      roiMoving.SetRadiusXYZ(45, 45, 45)
+      roiMoving.SelectableOff()
+      roiMoving.SetDisplayVisibility(0)
 
-      #crop the moving
+      # crop the moving
       cvpn.SetROINodeID( roiMoving.GetID() )
       cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
       cropLogic.Apply( cvpn )
@@ -531,7 +537,8 @@ class LandmarkRegistrationWidget:
       slicer.mrmlScene.AddNode(transform)
       matrix = vtk.vtkMatrix4x4()
 
-      # register the ROIs
+      # define the registration parameters
+      minPixelSpacing = min(croppedFixedVolume.GetSpacing())
       parameters = {}
       parameters['fixedVolume'] = croppedFixedVolume.GetID()
       parameters['movingVolume'] = croppedMovingVolume.GetID()
@@ -539,7 +546,10 @@ class LandmarkRegistrationWidget:
       parameters['useRigid'] = True
       parameters['initializeTransformMode'] = 'useGeometryAlign';
       parameters['samplingPercentage'] = 0.2
+      parameters['minimumStepLength'] = 0.1 * minPixelSpacing
+      parameters['maximumStepLength'] = minPixelSpacing
 
+      # run the registration
       slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
 
       # apply the local transform to the landmark
@@ -561,9 +571,10 @@ class LandmarkRegistrationWidget:
 
       # remove rois
       # TODO: causes a crash
-      qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi) )
-      qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi) )
-
+      #qt.QTimer.singleShot(0, lambda roi=roiFixed: slicer.mrmlScene.RemoveNode(roi) )
+      #qt.QTimer.singleShot(0, lambda roi=roiMoving: slicer.mrmlScene.RemoveNode(roi) )
+      slicer.mrmlScene.RemoveNode(roiFixed) 
+      slicer.mrmlScene.RemoveNode(roiMoving) 
       roiFixed = None
       roiMoving = None
 
@@ -571,6 +582,9 @@ class LandmarkRegistrationWidget:
       slicer.mrmlScene.RemoveNode(transform)
       transform = None
       matrix = None
+
+      end = time.time() 
+      print 'Refined landmark ' + landmarkName + ' in ' + str(end - start) + ' seconds'
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
