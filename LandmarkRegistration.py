@@ -518,7 +518,7 @@ class LandmarkRegistrationWidget:
       cropStart = time.time()
       cropLogic.Apply( cvpn )
       cropEnd = time.time()
-      print 'Time to crop a fixed volume ' + str(cropEnd - cropStart) + ' seconds'
+      print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
       croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
       # define an roi for the moving
@@ -537,7 +537,7 @@ class LandmarkRegistrationWidget:
       cropStart = time.time()
       cropLogic.Apply( cvpn )
       cropEnd = time.time()
-      print 'Time to crop a moving volume ' + str(cropEnd - cropStart) + ' seconds'
+      print 'Time to crop moving volume ' + str(cropEnd - cropStart) + ' seconds'
       croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
 
       #   
