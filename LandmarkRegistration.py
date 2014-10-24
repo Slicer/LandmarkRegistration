@@ -558,7 +558,10 @@ class LandmarkRegistrationWidget:
       parameters['maximumStepLength'] = minPixelSpacing
 
       # run the registration
+      regStart = time.time()
       slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
+      regEnd = time.time()
+      print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
 
       # apply the local transform to the landmark
       #print transform
