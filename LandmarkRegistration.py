@@ -583,8 +583,7 @@ class LandmarkRegistrationWidget:
 
       # clean up cropped volmes, need to reset the foreground/background display before we delete it
       if timing: cleanUpStart = time.time()
-      self.visualizationWidget.updateVisualization()
-      slicer.app.processEvents()
+      self.onLandmarkPicked(landmarkName)
       slicer.mrmlScene.RemoveNode(croppedFixedVolume)
       slicer.mrmlScene.RemoveNode(croppedMovingVolume)
       slicer.mrmlScene.RemoveNode(roiFixed) 
