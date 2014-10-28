@@ -469,138 +469,23 @@ class LandmarkRegistrationWidget:
           displayNode.AddViewNodeID("__invalid_view_id__")
 
   def onRefineClicked(self):
-    #print ("refining landmark " + self.landmarksWidget.selectedLandmark)
-
-    # Refine selected landmark, or if none, loop over all landmarks
-    #     Crop images around the fiducial
-    #     Affine registration of the cropped images
-    #     Transform the fiducial using the transformation
-    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
+    """Refine the selected landmark"""
     timing = False
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
 
     fixedVolume = self.volumeSelectors["Fixed"].currentNode()
     movingVolume = self.volumeSelectors["Moving"].currentNode()
 
     volumesList = (fixedVolume,movingVolume)
-    landmarks = self.logic.landmarksForVolumes(volumesList)
-
-    cropLogic = slicer.modules.cropvolume.logic()
-    cvpn = slicer.vtkMRMLCropVolumeParametersNode()
-    cvpn.SetInterpolationMode(1)
-    cvpn.SetVoxelBased(1)
-    fixedPoint = [0,]*3
-    movingPoint = [0,]*3
 
     if self.landmarksWidget.selectedLandmark != None :
-      landmarkName = self.landmarksWidget.selectedLandmark
-      print ("Refining landmark " + landmarkName)
-      start = time.time()
+      self.logic.refineLandmark(self.landmarksWidget.selectedLandmark, volumesList)
+      if timing: onLandmarkPickedStart = time.time()
+      self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
+      if timing: onLandmarkPickedEnd = time.time()
+      if timing: print 'Time to update visualization ' + str(onLandmarkPickedEnd - onLandmarkPickedStart) + ' seconds'
 
-      (fixedFiducial, movingFiducial) = landmarks[landmarkName]
-
-      (fixedList,fixedIndex) = fixedFiducial
-      (movingList, movingIndex) = movingFiducial
-
-      # define an roi for the fixed
-      if timing: roiStart = time.time()
-      roiFixed = slicer.vtkMRMLAnnotationROINode()
-      slicer.mrmlScene.AddNode(roiFixed)
-
-      fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
-      roiFixed.SetXYZ(fixedPoint)
-      roiFixed.SetRadiusXYZ(30, 30, 30)
-      roiFixed.SelectableOff()
-      roiFixed.SetDisplayVisibility(0)
-
-      # crop the fixed
-      cvpn.SetROINodeID( roiFixed.GetID() )
-      cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
-      if timing: roiEnd = time.time()
-      if timing: cropStart = time.time()
-      cropLogic.Apply( cvpn )
-      if timing: cropEnd = time.time()
-      croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
-
-      # define an roi for the moving
-      if timing: roi2Start = time.time()
-      roiMoving = slicer.vtkMRMLAnnotationROINode()
-      slicer.mrmlScene.AddNode(roiMoving)
-
-      movingList.GetNthFiducialPosition(movingIndex,movingPoint)
-      roiMoving.SetXYZ(movingPoint)
-      roiMoving.SetRadiusXYZ(45, 45, 45)
-      roiMoving.SelectableOff()
-      roiMoving.SetDisplayVisibility(0)
-
-      # crop the moving
-      cvpn.SetROINodeID( roiMoving.GetID() )
-      cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
-      if timing: roi2End = time.time()
-      if timing: crop2Start = time.time()
-      cropLogic.Apply( cvpn )
-      if timing: crop2End = time.time()
-      croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
-
-      if timing: print 'Time to set up ROIs was ' + str(roiEnd - roiStart + roi2End - roi2Start) + ' seconds'
-      if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
-      if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
-
-      #   
-      transform = slicer.vtkMRMLLinearTransformNode()
-      slicer.mrmlScene.AddNode(transform)
-      matrix = vtk.vtkMatrix4x4()
-
-      # define the registration parameters
-      minPixelSpacing = min(croppedFixedVolume.GetSpacing())
-      parameters = {}
-      parameters['fixedVolume'] = croppedFixedVolume.GetID()
-      parameters['movingVolume'] = croppedMovingVolume.GetID()
-      parameters['linearTransform'] = transform.GetID()
-      parameters['useRigid'] = True
-      parameters['initializeTransformMode'] = 'useGeometryAlign';
-      parameters['samplingPercentage'] = 0.2
-      parameters['minimumStepLength'] = 0.1 * minPixelSpacing
-      parameters['maximumStepLength'] = minPixelSpacing
-
-      # run the registration
-      if timing: regStart = time.time()
-      slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
-      if timing: regEnd = time.time()
-      if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
-
-      # apply the local transform to the landmark
-      #print transform
-      if timing: resultStart = time.time()
-      transform.GetMatrixTransformToWorld(matrix)
-      matrix.Invert()
-      tp = [0,]*4
-      tp = matrix.MultiplyPoint(fixedPoint + [1,])
-      #print fixedPoint, movingPoint, tp[:3]
-
-      movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
-      if timing: resultEnd = time.time()
-      if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
-
-      # clean up cropped volmes, need to reset the foreground/background display before we delete it
-      if timing: cleanUpStart = time.time()
-      self.onLandmarkPicked(landmarkName)
-      slicer.mrmlScene.RemoveNode(croppedFixedVolume)
-      slicer.mrmlScene.RemoveNode(croppedMovingVolume)
-      slicer.mrmlScene.RemoveNode(roiFixed) 
-      slicer.mrmlScene.RemoveNode(roiMoving) 
-      slicer.mrmlScene.RemoveNode(transform)
-      roiFixed = None
-      roiMoving = None
-      transform = None
-      matrix = None
-      if timing: cleanUpEnd = time.time()
-      if timing: print 'Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds'
-
-      end = time.time() 
-      print 'Refined landmark ' + landmarkName + ' in ' + str(end - start) + ' seconds'
-
-      slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
-
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -770,6 +655,7 @@ class LandmarkRegistrationLogic:
   def __init__(self):
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
+    self.cropLogic = slicer.modules.cropvolume.logic()
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
@@ -1022,6 +908,136 @@ class LandmarkRegistrationLogic:
           fiducials.GetNthFiducialPosition(index,point)
           points[volumeNode].InsertNextPoint(point)
     return points
+
+  def refineLandmark(self, landmarkName, volumes):
+    """Refine the specified landmark"""
+    # Refine landmark, or if none, do nothing
+    #     Crop images around the fiducial
+    #     Affine registration of the cropped images
+    #     Transform the fiducial using the transformation
+    timing = False
+
+    (fixedVolume, movingVolume) = volumes
+
+    if fixedVolume == None or movingVolume == None or landmarkName == None:
+        return
+
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
+    landmarks = self.landmarksForVolumes(volumes)
+
+    cvpn = slicer.vtkMRMLCropVolumeParametersNode()
+    cvpn.SetInterpolationMode(1)
+    cvpn.SetVoxelBased(1)
+    fixedPoint = [0,]*3
+    movingPoint = [0,]*3
+
+    print ("Refining landmark " + landmarkName)
+    start = time.time()
+
+    (fixedFiducial, movingFiducial) = landmarks[landmarkName]
+
+    (fixedList,fixedIndex) = fixedFiducial
+    (movingList, movingIndex) = movingFiducial
+
+    # define an roi for the fixed
+    if timing: roiStart = time.time()
+    roiFixed = slicer.vtkMRMLAnnotationROINode()
+    slicer.mrmlScene.AddNode(roiFixed)
+
+    fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
+    roiFixed.SetXYZ(fixedPoint)
+    roiFixed.SetRadiusXYZ(30, 30, 30)
+    roiFixed.SelectableOff()
+    roiFixed.SetDisplayVisibility(0)
+
+    # crop the fixed
+    cvpn.SetROINodeID( roiFixed.GetID() )
+    cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
+    if timing: roiEnd = time.time()
+    if timing: cropStart = time.time()
+    self.cropLogic.Apply( cvpn )
+    if timing: cropEnd = time.time()
+    croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+
+    # define an roi for the moving
+    if timing: roi2Start = time.time()
+    roiMoving = slicer.vtkMRMLAnnotationROINode()
+    slicer.mrmlScene.AddNode(roiMoving)
+
+    movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+    roiMoving.SetXYZ(movingPoint)
+    roiMoving.SetRadiusXYZ(45, 45, 45)
+    roiMoving.SelectableOff()
+    roiMoving.SetDisplayVisibility(0)
+
+    # crop the moving
+    cvpn.SetROINodeID( roiMoving.GetID() )
+    cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
+    if timing: roi2End = time.time()
+    if timing: crop2Start = time.time()
+    self.cropLogic.Apply( cvpn )
+    if timing: crop2End = time.time()
+    croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+
+    if timing: print 'Time to set up ROIs was ' + str(roiEnd - roiStart + roi2End - roi2Start) + ' seconds'
+    if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
+    if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
+
+    #   
+    transform = slicer.vtkMRMLLinearTransformNode()
+    slicer.mrmlScene.AddNode(transform)
+    matrix = vtk.vtkMatrix4x4()
+
+    # define the registration parameters
+    minPixelSpacing = min(croppedFixedVolume.GetSpacing())
+    parameters = {}
+    parameters['fixedVolume'] = croppedFixedVolume.GetID()
+    parameters['movingVolume'] = croppedMovingVolume.GetID()
+    parameters['linearTransform'] = transform.GetID()
+    parameters['useRigid'] = True
+    parameters['initializeTransformMode'] = 'useGeometryAlign';
+    parameters['samplingPercentage'] = 0.2
+    parameters['minimumStepLength'] = 0.1 * minPixelSpacing
+    parameters['maximumStepLength'] = minPixelSpacing
+
+    # run the registration
+    if timing: regStart = time.time()
+    slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
+    if timing: regEnd = time.time()
+    if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
+
+    # apply the local transform to the landmark
+    #print transform
+    if timing: resultStart = time.time()
+    transform.GetMatrixTransformToWorld(matrix)
+    matrix.Invert()
+    tp = [0,]*4
+    tp = matrix.MultiplyPoint(fixedPoint + [1,])
+    #print fixedPoint, movingPoint, tp[:3]
+
+    movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
+    if timing: resultEnd = time.time()
+    if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
+
+    # clean up cropped volmes, need to reset the foreground/background display before we delete it
+    if timing: cleanUpStart = time.time()
+    slicer.mrmlScene.RemoveNode(croppedFixedVolume)
+    slicer.mrmlScene.RemoveNode(croppedMovingVolume)
+    slicer.mrmlScene.RemoveNode(roiFixed) 
+    slicer.mrmlScene.RemoveNode(roiMoving) 
+    slicer.mrmlScene.RemoveNode(transform)
+    roiFixed = None
+    roiMoving = None
+    transform = None
+    matrix = None
+    if timing: cleanUpEnd = time.time()
+    if timing: print 'Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds'
+
+    end = time.time() 
+    print 'Refined landmark ' + landmarkName + ' in ' + str(end - start) + ' seconds'
+
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
+
 
 
 class LandmarkRegistrationTest(unittest.TestCase):
