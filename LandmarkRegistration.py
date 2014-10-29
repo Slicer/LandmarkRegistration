@@ -410,6 +410,7 @@ class LandmarkRegistrationWidget:
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
     # argument registationState is a callable that gets current state
     self.currentRegistrationInterface.create(self.registationState)
+    self.currentRegistrationInterface.onLandmarkEndMoving(self.registationState)
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
@@ -448,13 +449,14 @@ class LandmarkRegistrationWidget:
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
                   if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
                     displayNode.SetVisibility(False)
-      allFiducialLists = slicer.util.getNodes('vtkMRMLMarkupsFiducial*').values()
+      allFiducialLists = slicer.util.getNodes('vtkMRMLMarkupsFiducialNode').values()
       for fiducialList in allFiducialLists:
         if fiducialList not in activeFiducialLists:
           displayNode = fiducialList.GetDisplayNode()
-          displayNode.SetVisibility(False)
-          displayNode.RemoveAllViewNodeIDs()
-          displayNode.AddViewNodeID("__invalid_view_id__")
+          if displayNode:
+            displayNode.SetVisibility(False)
+            displayNode.RemoveAllViewNodeIDs()
+            displayNode.AddViewNodeID("__invalid_view_id__")
 
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
@@ -621,6 +623,18 @@ class LandmarkRegistrationLogic:
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
 
+  def setFiducialListDisplay(self,fiducialList):
+    displayNode = fiducialList.GetDisplayNode()
+    # TODO: pick appropriate defaults
+    # 135,135,84
+    displayNode.SetTextScale(6.)
+    displayNode.SetGlyphScale(6.)
+    displayNode.SetGlyphTypeFromString('StarBurst2D')
+    displayNode.SetColor((1,1,0.4))
+    displayNode.SetSelectedColor((1,1,0))
+    #displayNode.GetAnnotationTextDisplayNode().SetColor((1,1,0))
+    displayNode.SetVisibility(True)
+
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
     volume node.  Creates a new list if needed.
@@ -640,15 +654,7 @@ class LandmarkRegistrationLogic:
       fiducialList = slicer.util.getNode(fiducialListNodeID)
       if associatedNode:
         fiducialList.SetAttribute("AssociatedNodeID", associatedNode.GetID())
-      displayNode = fiducialList.GetDisplayNode()
-      # TODO: pick appropriate defaults
-      # 135,135,84
-      displayNode.SetTextScale(6.)
-      displayNode.SetGlyphScale(6.)
-      displayNode.SetGlyphTypeFromString('StarBurst2D')
-      displayNode.SetColor((1,1,0))
-      #displayNode.GetAnnotationTextDisplayNode().SetColor((1,1,0))
-      displayNode.SetVisibility(True)
+      self.setFiducialListDisplay(fiducialList)
 
     # make this active so that the fids will be added to it
     markupsLogic.SetActiveListID(fiducialList)
@@ -724,7 +730,12 @@ class LandmarkRegistrationLogic:
     if not volumeNode:
       return None
     listName = volumeNode.GetName() + "-landmarks"
-    return slicer.util.getNode(listName)
+    listNode = slicer.util.getNode(listName)
+    if listNode:
+      if listNode.GetAttribute("AssociatedNodeID") != volumeNode.GetID():
+        self.setFiducialListDisplay(listNode)
+        listNode.SetAttribute("AssociatedNodeID",volumeNode.GetID())
+    return listNode
 
   def landmarksForVolumes(self,volumeNodes):
     """Return a dictionary of keyed by
