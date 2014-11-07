@@ -470,7 +470,7 @@ class LandmarkRegistrationWidget:
 
   def onRefineClicked(self):
     """Refine the selected landmark"""
-    timing = False
+    timing = True
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
 
     fixedVolume = self.volumeSelectors["Fixed"].currentNode()
@@ -656,6 +656,7 @@ class LandmarkRegistrationLogic:
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
     self.cropLogic = slicer.modules.cropvolume.logic()
+
 
   def addFiducial(self,name,position=(0,0,0),associatedNode=None):
     """Add an instance of a fiducial to the scene for a given
@@ -915,7 +916,7 @@ class LandmarkRegistrationLogic:
     #     Crop images around the fiducial
     #     Affine registration of the cropped images
     #     Transform the fiducial using the transformation
-    timing = False
+    timing = True
 
     (fixedVolume, movingVolume) = volumes
 
@@ -945,19 +946,23 @@ class LandmarkRegistrationLogic:
     slicer.mrmlScene.AddNode(roiFixed)
 
     fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
+    roiFixed.SetDisplayVisibility(0)
+    roiFixed.SelectableOff()
     roiFixed.SetXYZ(fixedPoint)
     roiFixed.SetRadiusXYZ(30, 30, 30)
-    roiFixed.SelectableOff()
-    roiFixed.SetDisplayVisibility(0)
 
-    # crop the fixed
+    # crop the fixed. note we hide the display node temporarily to avoid the automated
+    # window level calculation on temporary nodes created by cloning
     cvpn.SetROINodeID( roiFixed.GetID() )
     cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
+    fixedDisplayNode = fixedVolume.GetDisplayNode()  
+    fixedVolume.SetAndObserveDisplayNodeID('This is not a valid DisplayNode ID')
     if timing: roiEnd = time.time()
     if timing: cropStart = time.time()
     self.cropLogic.Apply( cvpn )
     if timing: cropEnd = time.time()
     croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+    fixedVolume.SetAndObserveDisplayNodeID(fixedDisplayNode.GetID())
 
     # define an roi for the moving
     if timing: roi2Start = time.time()
@@ -965,21 +970,26 @@ class LandmarkRegistrationLogic:
     slicer.mrmlScene.AddNode(roiMoving)
 
     movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+    roiMoving.SetDisplayVisibility(0)
+    roiMoving.SelectableOff()
     roiMoving.SetXYZ(movingPoint)
     roiMoving.SetRadiusXYZ(45, 45, 45)
-    roiMoving.SelectableOff()
-    roiMoving.SetDisplayVisibility(0)
 
-    # crop the moving
+    # crop the moving. note we hide the display node temporarily to avoid the automated
+    # window level calculation on temporary nodes created by cloning
     cvpn.SetROINodeID( roiMoving.GetID() )
     cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
+    movingDisplayNode = movingVolume.GetDisplayNode()  
+    movingVolume.SetAndObserveDisplayNodeID('This is not a valid DisplayNode ID')
     if timing: roi2End = time.time()
     if timing: crop2Start = time.time()
     self.cropLogic.Apply( cvpn )
     if timing: crop2End = time.time()
     croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
+    movingVolume.SetAndObserveDisplayNodeID(movingDisplayNode.GetID())
 
-    if timing: print 'Time to set up ROIs was ' + str(roiEnd - roiStart + roi2End - roi2Start) + ' seconds'
+    if timing: print 'Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds'
+    if timing: print 'Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds'
     if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
     if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
 
