@@ -44,6 +44,9 @@ class RegistrationPlugin(object):
   # - widget will be disabled until landmarks are defined
   landmarksNeededToEnable = 1
 
+  # is this a registration plugin or a refinement plugin
+  type = "Registration"
+
   # used for reloading - every concrete class should include this
   sourceFile = __file__
 

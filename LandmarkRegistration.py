@@ -68,6 +68,7 @@ class LandmarkRegistrationWidget:
     self.viewNames = ("Fixed", "Moving", "Transformed")
     self.volumeSelectDialog = None
     self.currentRegistrationInterface = None
+    self.currentLocalRefinementInterface = None
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -186,14 +187,40 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
-    # placeholder for landmark refinement
-    # TODO: move this to a dedicated refinement class
+    # Local landmark refinement
     #
-    self.refineButton = qt.QPushButton()
-    self.refineButton.text = 'No landmark selected for refinement'
-    self.refineButton.toolTip = 'Refine the currently selected landmark based on local registration'
-    self.refineButton.connect('clicked()', self.onRefineClicked)
-    parametersFormLayout.addRow(self.refineButton)
+    self.localRefinementCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.localRefinementCollapsibleButton.text = "Local Refinement"
+    self.interfaceFrame.layout().addWidget(self.localRefinementCollapsibleButton)
+    localRefinementFormLayout = qt.QFormLayout(self.localRefinementCollapsibleButton)
+
+    self.localRefineButton = qt.QPushButton()
+    self.localRefineButton.text = 'No landmark selected for local refinement'
+    self.localRefineButton.toolTip = 'Refine the currently selected landmark using local registration'
+    self.localRefineButton.connect('clicked()', self.onLocalRefineClicked)
+    localRefinementFormLayout.addRow(self.localRefineButton)
+
+    try:
+      slicer.modules.registrationPlugins
+    except AttributeError:
+      slicer.modules.registrationPlugins = {}
+
+    self.localRefinementMethodBox = qt.QGroupBox("Local Refinement Method")
+    self.localRefinementMethodBox.setLayout(qt.QFormLayout())
+    self.localRefinementMethodButtons = {}
+    self.localRefinementMethods = slicer.modules.registrationPlugins.keys()
+    self.localRefinementMethods.sort()
+    for localRefinementMethod in self.localRefinementMethods:
+      plugin = slicer.modules.registrationPlugins[localRefinementMethod]
+      if plugin.type == "Refinement":
+        self.localRefinementMethodButtons[localRefinementMethod] = qt.QRadioButton()
+        self.localRefinementMethodButtons[localRefinementMethod].text = plugin.name
+        self.localRefinementMethodButtons[localRefinementMethod].setToolTip(plugin.tooltip)
+        self.localRefinementMethodButtons[localRefinementMethod].connect("clicked()",
+                                  lambda t=localRefinementMethod: self.onLocalRefinementMethod(t))
+        self.localRefinementMethodBox.layout().addWidget(
+                                  self.localRefinementMethodButtons[localRefinementMethod])
+    localRefinementFormLayout.addWidget(self.localRefinementMethodBox)
 
 
     #
@@ -220,13 +247,14 @@ class LandmarkRegistrationWidget:
     self.registrationTypes.sort()
     for registrationType in self.registrationTypes:
       plugin = slicer.modules.registrationPlugins[registrationType]
-      self.registrationTypeButtons[registrationType] = qt.QRadioButton()
-      self.registrationTypeButtons[registrationType].text = plugin.name
-      self.registrationTypeButtons[registrationType].setToolTip(plugin.tooltip)
-      self.registrationTypeButtons[registrationType].connect("clicked()",
-                                lambda t=registrationType: self.onRegistrationType(t))
-      self.registrationTypeBox.layout().addWidget(
-                                self.registrationTypeButtons[registrationType])
+      if plugin.type == "Registration":
+        self.registrationTypeButtons[registrationType] = qt.QRadioButton()
+        self.registrationTypeButtons[registrationType].text = plugin.name
+        self.registrationTypeButtons[registrationType].setToolTip(plugin.tooltip)
+        self.registrationTypeButtons[registrationType].connect("clicked()",
+                                  lambda t=registrationType: self.onRegistrationType(t))
+        self.registrationTypeBox.layout().addWidget(
+                                  self.registrationTypeButtons[registrationType])
     registrationFormLayout.addWidget(self.registrationTypeBox)
 
     # connections
@@ -358,6 +386,8 @@ class LandmarkRegistrationWidget:
     state.movingFiducials = self.logic.volumeFiducialList(state.moving)
     state.transformedFiducials = self.logic.volumeFiducialList(state.transformed)
     state.transform = self.transformSelector.currentNode()
+    state.currentLandmarkName = self.landmarksWidget.selectedLandmark
+
     return(state)
 
   def currentVolumeNodes(self):
@@ -423,6 +453,15 @@ class LandmarkRegistrationWidget:
     # argument registationState is a callable that gets current state
     self.currentRegistrationInterface.create(self.registationState)
 
+  def onLocalRefinementMethod(self,pickedLocalRefinementMethod):
+    """Pick which local refinement method to display"""
+    if self.currentLocalRefinementInterface:
+      self.currentLocalRefinementInterface.destroy()
+    interfaceClass = slicer.modules.registrationPlugins[pickedLocalRefinementMethod]
+    self.currentLocalRefinementInterface = interfaceClass(self.localRefinementCollapsibleButton)
+    # argument registrationState is a callable that gets current state, current same instance is shared for registration and local refinement
+    self.currentLocalRefinementInterface.create(self.registationState)
+
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
     node that are currently displaying a given volumeID"""
@@ -468,18 +507,15 @@ class LandmarkRegistrationWidget:
           displayNode.RemoveAllViewNodeIDs()
           displayNode.AddViewNodeID("__invalid_view_id__")
 
-  def onRefineClicked(self):
+  def onLocalRefineClicked(self):
     """Refine the selected landmark"""
     timing = True
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
 
-    fixedVolume = self.volumeSelectors["Fixed"].currentNode()
-    movingVolume = self.volumeSelectors["Moving"].currentNode()
-
-    volumesList = (fixedVolume,movingVolume)
-
     if self.landmarksWidget.selectedLandmark != None :
-      self.logic.refineLandmark(self.landmarksWidget.selectedLandmark, volumesList)
+      if self.currentLocalRefinementInterface:
+        state = self.registationState()
+        self.currentLocalRefinementInterface.refineLandmark(state)
       if timing: onLandmarkPickedStart = time.time()
       self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
       if timing: onLandmarkPickedEnd = time.time()
@@ -506,9 +542,9 @@ class LandmarkRegistrationWidget:
             if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
     if landmarkName != None :
-      self.refineButton.text = 'Refine landmark ' + landmarkName
+      self.localRefineButton.text = 'Refine landmark ' + landmarkName
     else:
-      self.refineButton.text = 'No landmark selected for refinement'
+      self.localRefineButton.text = 'No landmark selected for refinement'
 
   def onLandmarkMoved(self,landmarkName):
     """Called when a landmark is moved (probably through
@@ -535,6 +571,8 @@ class LandmarkRegistrationWidget:
     # contain subclasses of the RegistrationLib modules
     if self.currentRegistrationInterface:
       self.currentRegistrationInterface.destroy()
+    if self.currentLocalRefinementInterface:
+      self.currentLocalRefinementInterface.destroy()
 
     # now reload the RegistrationLib source code
     # - set source file path
@@ -910,143 +948,6 @@ class LandmarkRegistrationLogic:
           points[volumeNode].InsertNextPoint(point)
     return points
 
-  def refineLandmark(self, landmarkName, volumes):
-    """Refine the specified landmark"""
-    # Refine landmark, or if none, do nothing
-    #     Crop images around the fiducial
-    #     Affine registration of the cropped images
-    #     Transform the fiducial using the transformation
-    timing = True
-
-    (fixedVolume, movingVolume) = volumes
-
-    if fixedVolume == None or movingVolume == None or landmarkName == None:
-        return
-
-    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
-    landmarks = self.landmarksForVolumes(volumes)
-
-    cvpn = slicer.vtkMRMLCropVolumeParametersNode()
-    cvpn.SetInterpolationMode(1)
-    cvpn.SetVoxelBased(1)
-    fixedPoint = [0,]*3
-    movingPoint = [0,]*3
-
-    print ("Refining landmark " + landmarkName)
-    start = time.time()
-
-    (fixedFiducial, movingFiducial) = landmarks[landmarkName]
-
-    (fixedList,fixedIndex) = fixedFiducial
-    (movingList, movingIndex) = movingFiducial
-
-    # define an roi for the fixed
-    if timing: roiStart = time.time()
-    roiFixed = slicer.vtkMRMLAnnotationROINode()
-    slicer.mrmlScene.AddNode(roiFixed)
-
-    fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
-    roiFixed.SetDisplayVisibility(0)
-    roiFixed.SelectableOff()
-    roiFixed.SetXYZ(fixedPoint)
-    roiFixed.SetRadiusXYZ(30, 30, 30)
-
-    # crop the fixed. note we hide the display node temporarily to avoid the automated
-    # window level calculation on temporary nodes created by cloning
-    cvpn.SetROINodeID( roiFixed.GetID() )
-    cvpn.SetInputVolumeNodeID( fixedVolume.GetID() )
-    fixedDisplayNode = fixedVolume.GetDisplayNode()  
-    fixedVolume.SetAndObserveDisplayNodeID('This is not a valid DisplayNode ID')
-    if timing: roiEnd = time.time()
-    if timing: cropStart = time.time()
-    self.cropLogic.Apply( cvpn )
-    if timing: cropEnd = time.time()
-    croppedFixedVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
-    fixedVolume.SetAndObserveDisplayNodeID(fixedDisplayNode.GetID())
-
-    # define an roi for the moving
-    if timing: roi2Start = time.time()
-    roiMoving = slicer.vtkMRMLAnnotationROINode()
-    slicer.mrmlScene.AddNode(roiMoving)
-
-    movingList.GetNthFiducialPosition(movingIndex,movingPoint)
-    roiMoving.SetDisplayVisibility(0)
-    roiMoving.SelectableOff()
-    roiMoving.SetXYZ(movingPoint)
-    roiMoving.SetRadiusXYZ(45, 45, 45)
-
-    # crop the moving. note we hide the display node temporarily to avoid the automated
-    # window level calculation on temporary nodes created by cloning
-    cvpn.SetROINodeID( roiMoving.GetID() )
-    cvpn.SetInputVolumeNodeID( movingVolume.GetID() )
-    movingDisplayNode = movingVolume.GetDisplayNode()  
-    movingVolume.SetAndObserveDisplayNodeID('This is not a valid DisplayNode ID')
-    if timing: roi2End = time.time()
-    if timing: crop2Start = time.time()
-    self.cropLogic.Apply( cvpn )
-    if timing: crop2End = time.time()
-    croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
-    movingVolume.SetAndObserveDisplayNodeID(movingDisplayNode.GetID())
-
-    if timing: print 'Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds'
-    if timing: print 'Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds'
-    if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
-    if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
-
-    #   
-    transform = slicer.vtkMRMLLinearTransformNode()
-    slicer.mrmlScene.AddNode(transform)
-    matrix = vtk.vtkMatrix4x4()
-
-    # define the registration parameters
-    minPixelSpacing = min(croppedFixedVolume.GetSpacing())
-    parameters = {}
-    parameters['fixedVolume'] = croppedFixedVolume.GetID()
-    parameters['movingVolume'] = croppedMovingVolume.GetID()
-    parameters['linearTransform'] = transform.GetID()
-    parameters['useRigid'] = True
-    parameters['initializeTransformMode'] = 'useGeometryAlign';
-    parameters['samplingPercentage'] = 0.2
-    parameters['minimumStepLength'] = 0.1 * minPixelSpacing
-    parameters['maximumStepLength'] = minPixelSpacing
-
-    # run the registration
-    if timing: regStart = time.time()
-    slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
-    if timing: regEnd = time.time()
-    if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
-
-    # apply the local transform to the landmark
-    #print transform
-    if timing: resultStart = time.time()
-    transform.GetMatrixTransformToWorld(matrix)
-    matrix.Invert()
-    tp = [0,]*4
-    tp = matrix.MultiplyPoint(fixedPoint + [1,])
-    #print fixedPoint, movingPoint, tp[:3]
-
-    movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
-    if timing: resultEnd = time.time()
-    if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
-
-    # clean up cropped volmes, need to reset the foreground/background display before we delete it
-    if timing: cleanUpStart = time.time()
-    slicer.mrmlScene.RemoveNode(croppedFixedVolume)
-    slicer.mrmlScene.RemoveNode(croppedMovingVolume)
-    slicer.mrmlScene.RemoveNode(roiFixed) 
-    slicer.mrmlScene.RemoveNode(roiMoving) 
-    slicer.mrmlScene.RemoveNode(transform)
-    roiFixed = None
-    roiMoving = None
-    transform = None
-    matrix = None
-    if timing: cleanUpEnd = time.time()
-    if timing: print 'Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds'
-
-    end = time.time() 
-    print 'Refined landmark ' + landmarkName + ' in ' + str(end - start) + ' seconds'
-
-    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
 
 
