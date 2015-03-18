@@ -111,6 +111,8 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
         return
 
+    start = time.time()
+
     volumes = (state.fixed, state.moving)
     (fixedVolume, movingVolume) = volumes
 
@@ -124,7 +126,6 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     movingPoint = [0,]*3
 
     print ("Refining landmark " + state.currentLandmarkName)
-    start = time.time()
 
     (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
 
