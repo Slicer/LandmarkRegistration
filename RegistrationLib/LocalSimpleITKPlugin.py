@@ -1,5 +1,8 @@
 import os
 import time
+import SimpleITK as sitk
+import sitkUtils
+from contextlib import contextmanager
 from __main__ import vtk, qt, ctk, slicer
 import RegistrationLib
 
@@ -96,6 +99,140 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     state = self.registationState()
     self.LocalSimpleITKMode = mode
     self.onLandmarkMoved(state)
+
+  def refineLandmark(self, state):
+    """Refine the specified landmark"""
+    # Refine landmark, or if none, do nothing
+    #     Crop images around the fiducial
+    #     Affine registration of the cropped images
+    #     Transform the fiducial using the transformation
+    #
+    # No need to take into account the current transformation because landmarks are in World RAS
+    timing = True
+    verbose = True
+
+    if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
+        return
+
+    start = time.time()
+    if timing: loadStart = start
+
+    volumes = (state.fixed, state.moving)
+    (fixedVolume, movingVolume) = volumes
+
+    fixedImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(fixedVolume.GetName()) )
+    movingImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(movingVolume.GetName()) )
+
+    if timing: print 'Time for loading ' + str(time.time() - loadStart) + ' seconds'
+
+    print ("Refining landmark " + state.currentLandmarkName)
+    landmarks = state.logic.landmarksForVolumes(volumes)
+
+    (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
+
+    (fixedList,fixedIndex) = fixedFiducial
+    (movingList, movingIndex) = movingFiducial
+
+    fixedPoint = [0,]*3
+    movingPoint = [0,]*3
+
+    fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
+    movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+
+    # HACK transform from RAS to LPS
+    fixedPoint = [-fixedPoint[0], -fixedPoint[1], fixedPoint[2]]
+    movingPoint = [-movingPoint[0], -movingPoint[1], movingPoint[2]]
+
+    # NOTE: SimpleITK index always starts at 0
+
+    fixedRadius = 30
+    fixedROISize = [0,]*3
+    fixedROIIndex = [0,]*3
+    fixedROIIndex = list(fixedImage.TransformPhysicalPointToIndex(fixedPoint))
+    for i in range(3):
+      if fixedROIIndex[i] < 0 or fixedROIIndex[i] > fixedImage.GetSize()[i]-1:
+        import sys
+        sys.stderr.write("Fixed landmark {0} in not with in fixed image!\n".format(landmarkName))
+        return
+      radius = min(fixedRadius, fixedROIIndex[i], fixedImage.GetSize()[i]-fixedROIIndex[i]-1)
+      fixedROISize[i] = radius*2+1
+      fixedROIIndex[i] -= radius
+    print "ROI: ",fixedROIIndex, fixedROISize
+
+    croppedFixedImage = sitk.RegionOfInterest( fixedImage, fixedROISize, fixedROIIndex)
+    croppedFixedImage = sitk.Cast(croppedFixedImage, sitk.sitkFloat32)
+
+    movingRadius = 30
+    movingROISize = [0,]*3
+    movingROIIndex = [0,]*3
+    movingROIIndex = list(movingImage.TransformPhysicalPointToIndex(movingPoint))
+    for i in range(3):
+      if movingROIIndex[i] < 0 or movingROIIndex[i] > movingImage.GetSize()[i]-1:
+        import sys
+        sys.stderr.write("Moving landmark {0} in not with in moving image!\n".format(landmarkName))
+        return
+      radius = min(movingRadius, movingROIIndex[i], movingImage.GetSize()[i]-movingROIIndex[i]-1)
+      movingROISize[i] = radius*2+1
+      movingROIIndex[i] -= radius
+    print "ROI: ",movingROIIndex, movingROISize
+
+    croppedMovingImage = sitk.RegionOfInterest( movingImage, movingROISize, movingROIIndex)
+    croppedMovingImage = sitk.Cast(croppedMovingImage, sitk.sitkFloat32)
+
+    tx = sitk.CenteredTransformInitializer(croppedFixedImage, croppedMovingImage, sitk.VersorRigid3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
+
+    R = sitk.ImageRegistrationMethod()
+    R.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+    R.SetMetricSamplingPercentage(0.2)
+    R.SetMetricSamplingStrategy(sitk.ImageRegistrationMethod.RANDOM)
+    R.SetOptimizerAsRegularStepGradientDescent(learningRate=1,
+                                               minStep=0.1,
+                                               relaxationFactor=0.5,
+                                               numberOfIterations=250)
+    R.SetOptimizerScalesFromJacobian() # Use this for versor based transforms
+    R.SetShrinkFactorsPerLevel([1])
+    R.SetSmoothingSigmasPerLevel([1])
+    R.SetInitialTransform(tx)
+    R.SetInterpolator(sitk.sitkLinear)
+    #R.SetNumberOfThreads(1)
+
+
+    def command_iteration(method) :
+      print("{0:3} = {1:10.5f} : {2}".format(method.GetOptimizerIteration(),
+                                             method.GetMetricValue(),
+                                             method.GetOptimizerPosition()))
+    if verbose:
+      R.AddCommand( sitk.sitkIterationEvent, lambda: command_iteration(R) )
+
+
+    # run the registration
+    if timing: regStart = time.time()
+
+    outTx = R.Execute(croppedFixedImage, croppedMovingImage)
+
+    if verbose:
+      print("-------")
+      print(outTx)
+      print("Optimizer stop condition: {0}".format(R.GetOptimizerStopConditionDescription()))
+      print(" Iteration: {0}".format(R.GetOptimizerIteration()))
+      print(" Metric value: {0}".format(R.GetMetricValue()))
+
+
+    if timing: regEnd = time.time()
+    if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
+
+    # apply the local transform to the landmark
+    #print transform
+
+    #outTx.SetInverse()
+    updatedPoint = outTx.TransformPoint(fixedPoint)
+
+    # HACK transform from LPS to RAS
+    updatedPoint = [-updatedPoint[0], -updatedPoint[1], updatedPoint[2]]
+    movingList.SetNthFiducialPosition(movingIndex, updatedPoint[0], updatedPoint[1], updatedPoint[2])
+
+    end = time.time()
+    print 'Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds'
 
 
 
