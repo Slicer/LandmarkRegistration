@@ -1,7 +1,12 @@
 # Ignore all dotfiles...
 .*
+
 # except for .gitignore
 !.gitignore
+
+# Ignore vim things
+*.sw*
+*.*~
 
 # Exclude QtCreator files ...
 CMakeLists.txt.user*
