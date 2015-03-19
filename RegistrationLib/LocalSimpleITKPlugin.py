@@ -64,6 +64,7 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
 
 
     self.LocalSimpleITKMode = "Small"
+    self.VerboseMode = "Quiet"
 
     #
     # Local Refinment Pane - initially hidden
@@ -88,6 +89,19 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     self.LocalSimpleITKModeButtons[self.LocalSimpleITKMode].checked = True
     LocalSimpleITKFormLayout.addRow("Local SimpleITK Mode ", buttonLayout)
 
+    buttonLayout = qt.QVBoxLayout()
+    self.VerboseModeButtons = {}
+    self.VerboseModes = ("Quiet", "Verbose", "Full Verbose")
+    for mode in self.VerboseModes:
+      self.VerboseModeButtons[mode] = qt.QRadioButton()
+      self.VerboseModeButtons[mode].text = mode
+      self.VerboseModeButtons[mode].setToolTip( "Run the refinement in %s mode." % mode.lower() )
+      buttonLayout.addWidget(self.VerboseModeButtons[mode])
+      self.widgets.append(self.VerboseModeButtons[mode])
+      self.VerboseModeButtons[mode].connect('clicked()', lambda m=mode : self.onVerboseMode(m))
+    self.VerboseModeButtons[self.VerboseMode].checked = True
+    LocalSimpleITKFormLayout.addRow("Verbose Mode ", buttonLayout)
+
     self.parent.layout().addWidget(self.LocalSimpleITKCollapsibleButton)
 
 
@@ -96,9 +110,10 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     super(LocalSimpleITKPlugin,self).destroy()
 
   def onLocalSimpleITKMode(self,mode):
-    state = self.registationState()
     self.LocalSimpleITKMode = mode
-    self.onLandmarkMoved(state)
+
+  def onVerboseMode(self,mode):
+    self.VerboseMode = mode
 
   def refineLandmark(self, state):
     """Refine the specified landmark"""
@@ -108,11 +123,15 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     #     Transform the fiducial using the transformation
     #
     # No need to take into account the current transformation because landmarks are in World RAS
-    timing = True
-    verbose = True
+    timing = False
+    if self.VerboseMode == "Verbose":
+      timing = True
 
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
-        return
+      print "Cannot refine landmarks. Images or landmarks not selected."
+      return
+
+    print ("Refining landmark " + state.currentLandmarkName) + " using " + self.name
 
     start = time.time()
     if timing: loadStart = start
@@ -123,9 +142,8 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     fixedImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(fixedVolume.GetName()) )
     movingImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(movingVolume.GetName()) )
 
-    if timing: print 'Time for loading ' + str(time.time() - loadStart) + ' seconds'
+    if timing: print 'Time for loading was ' + str(time.time() - loadStart) + ' seconds'
 
-    print ("Refining landmark " + state.currentLandmarkName)
     landmarks = state.logic.landmarksForVolumes(volumes)
 
     (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
@@ -145,6 +163,8 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
 
     # NOTE: SimpleITK index always starts at 0
 
+    # define an roi for the fixed
+    if timing: roiStart = time.time()
     fixedRadius = 30
     fixedROISize = [0,]*3
     fixedROIIndex = [0,]*3
@@ -157,12 +177,21 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
       radius = min(fixedRadius, fixedROIIndex[i], fixedImage.GetSize()[i]-fixedROIIndex[i]-1)
       fixedROISize[i] = radius*2+1
       fixedROIIndex[i] -= radius
-    print "ROI: ",fixedROIIndex, fixedROISize
+    if self.VerboseMode == "Full Verbose":  print "Fixed ROI: ",fixedROIIndex, fixedROISize
+    if timing: roiEnd = time.time()
 
+    # crop the fixed
+    if timing: cropStart = time.time()
     croppedFixedImage = sitk.RegionOfInterest( fixedImage, fixedROISize, fixedROIIndex)
     croppedFixedImage = sitk.Cast(croppedFixedImage, sitk.sitkFloat32)
+    if timing: cropEnd = time.time()
 
-    movingRadius = 30
+    # define an roi for the moving
+    if timing: roi2Start = time.time()
+    if self.LocalSimpleITKMode == "Small":
+      movingRadius = 45
+    else:
+      movingRadius = 60
     movingROISize = [0,]*3
     movingROIIndex = [0,]*3
     movingROIIndex = list(movingImage.TransformPhysicalPointToIndex(movingPoint))
@@ -174,13 +203,26 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
       radius = min(movingRadius, movingROIIndex[i], movingImage.GetSize()[i]-movingROIIndex[i]-1)
       movingROISize[i] = radius*2+1
       movingROIIndex[i] -= radius
-    print "ROI: ",movingROIIndex, movingROISize
+    if self.VerboseMode == "Full Verbose": print "Moving ROI: ",movingROIIndex, movingROISize
+    if timing: roi2End = time.time()
 
+    if timing: crop2Start = time.time()
     croppedMovingImage = sitk.RegionOfInterest( movingImage, movingROISize, movingROIIndex)
     croppedMovingImage = sitk.Cast(croppedMovingImage, sitk.sitkFloat32)
+    if timing: crop2End = time.time()
 
+    if timing: print 'Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds'
+    if timing: print 'Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds'
+    if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
+    if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
+
+    # initialize the registration
+    if timing: initTransformStart = time.time()
     tx = sitk.CenteredTransformInitializer(croppedFixedImage, croppedMovingImage, sitk.VersorRigid3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
+    if timing: initTransformEnd = time.time()
+    if timing: print 'Time to initialize transformation was ' + str(initTransformEnd - initTransformStart) + ' seconds'
 
+    # define the registration
     R = sitk.ImageRegistrationMethod()
     R.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
     R.SetMetricSamplingPercentage(0.2)
@@ -196,12 +238,12 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     R.SetInterpolator(sitk.sitkLinear)
     #R.SetNumberOfThreads(1)
 
-
+    # setup an observer
     def command_iteration(method) :
       print("{0:3} = {1:10.5f} : {2}".format(method.GetOptimizerIteration(),
                                              method.GetMetricValue(),
                                              method.GetOptimizerPosition()))
-    if verbose:
+    if self.VerboseMode == "Full Verbose":
       R.AddCommand( sitk.sitkIterationEvent, lambda: command_iteration(R) )
 
 
@@ -210,7 +252,7 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
 
     outTx = R.Execute(croppedFixedImage, croppedMovingImage)
 
-    if verbose:
+    if self.VerboseMode == "Full Verbose":
       print("-------")
       print(outTx)
       print("Optimizer stop condition: {0}".format(R.GetOptimizerStopConditionDescription()))
@@ -219,17 +261,20 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
 
 
     if timing: regEnd = time.time()
-    if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
+    if timing: print 'Time for local registration was ' + str(regEnd - regStart) + ' seconds'
 
     # apply the local transform to the landmark
     #print transform
 
+    if timing: resultStart = time.time()
     #outTx.SetInverse()
     updatedPoint = outTx.TransformPoint(fixedPoint)
 
     # HACK transform from LPS to RAS
     updatedPoint = [-updatedPoint[0], -updatedPoint[1], updatedPoint[2]]
     movingList.SetNthFiducialPosition(movingIndex, updatedPoint[0], updatedPoint[1], updatedPoint[2])
+    if timing: resultEnd = time.time()
+    if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
 
     end = time.time()
     print 'Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds'

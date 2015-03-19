@@ -61,6 +61,7 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
 
 
     self.LocalBRAINSFitMode = "Small"
+    self.VerboseMode = "Quiet"
 
     #
     # Local Refinment Pane - initially hidden
@@ -85,6 +86,20 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     self.LocalBRAINSFitModeButtons[self.LocalBRAINSFitMode].checked = True
     LocalBRAINSFitFormLayout.addRow("Local BRAINSFit Mode ", buttonLayout)
 
+    buttonLayout = qt.QVBoxLayout()
+    self.VerboseModeButtons = {}
+    self.VerboseModes = ("Quiet", "Verbose")
+    for mode in self.VerboseModes:
+      self.VerboseModeButtons[mode] = qt.QRadioButton()
+      self.VerboseModeButtons[mode].text = mode
+      self.VerboseModeButtons[mode].setToolTip( "Run the refinement in %s mode." % mode.lower() )
+      buttonLayout.addWidget(self.VerboseModeButtons[mode])
+      self.widgets.append(self.VerboseModeButtons[mode])
+      self.VerboseModeButtons[mode].connect('clicked()', lambda m=mode : self.onVerboseMode(m))
+    self.VerboseModeButtons[self.VerboseMode].checked = True
+    LocalBRAINSFitFormLayout.addRow("Verbose Mode ", buttonLayout)
+
+
     self.parent.layout().addWidget(self.LocalBRAINSFitCollapsibleButton)
 
 
@@ -94,9 +109,10 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
 
 
   def onLocalBRAINSFitMode(self,mode):
-    state = self.registationState()
     self.LocalBRAINSFitMode = mode
-    self.onLandmarkMoved(state)
+
+  def onVerboseMode(self,mode):
+    self.VerboseMode = mode
 
   def refineLandmark(self, state):
     """Refine the specified landmark"""
@@ -106,10 +122,15 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     #     Transform the fiducial using the transformation
     #
     # No need to take into account the current transformation because landmarks are in World RAS
-    timing = True
+    timing = False
+    if self.VerboseMode == "Verbose":
+      timing = True
 
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
-        return
+      print "Cannot refine landmarks. Images or landmarks not selected."
+      return
+
+    print ("Refining landmark " + state.currentLandmarkName) + " using " + self.name
 
     start = time.time()
 
@@ -124,8 +145,6 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     cvpn.SetVoxelBased(1)
     fixedPoint = [0,]*3
     movingPoint = [0,]*3
-
-    print ("Refining landmark " + state.currentLandmarkName)
 
     (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
 
@@ -165,7 +184,10 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     roiMoving.SetDisplayVisibility(0)
     roiMoving.SelectableOff()
     roiMoving.SetXYZ(movingPoint)
-    roiMoving.SetRadiusXYZ(45, 45, 45)
+    if self.LocalBRAINSFitMode == "Small":
+      roiMoving.SetRadiusXYZ(45, 45, 45)
+    else:
+      roiMoving.SetRadiusXYZ(60, 60, 60)
 
     # crop the moving. note we hide the display node temporarily to avoid the automated
     # window level calculation on temporary nodes created by cloning
