@@ -5,3 +5,5 @@ from RegistrationState import *
 from RegistrationPlugin import *
 from AffinePlugin import *
 from ThinPlatePlugin import *
+from LocalBRAINSFitPlugin import *
+from LocalSimpleITKPlugin import *

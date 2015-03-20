@@ -1,5 +1,6 @@
 import os, string
 import unittest
+import time
 from __main__ import vtk, qt, ctk, slicer
 
 import RegistrationLib
@@ -67,6 +68,7 @@ class LandmarkRegistrationWidget:
     self.viewNames = ("Fixed", "Moving", "Transformed")
     self.volumeSelectDialog = None
     self.currentRegistrationInterface = None
+    self.currentLocalRefinementInterface = None
 
     if not parent:
       self.parent = slicer.qMRMLWidget()
@@ -185,6 +187,43 @@ class LandmarkRegistrationWidget:
     parametersFormLayout.addRow(self.landmarksWidget.widget)
 
     #
+    # Local landmark refinement
+    #
+    self.localRefinementCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.localRefinementCollapsibleButton.text = "Local Refinement"
+    self.interfaceFrame.layout().addWidget(self.localRefinementCollapsibleButton)
+    localRefinementFormLayout = qt.QFormLayout(self.localRefinementCollapsibleButton)
+
+    self.localRefineButton = qt.QPushButton()
+    self.localRefineButton.text = 'No landmark selected for local refinement'
+    self.localRefineButton.toolTip = 'Refine the currently selected landmark using local registration'
+    self.localRefineButton.connect('clicked()', self.onLocalRefineClicked)
+    localRefinementFormLayout.addRow(self.localRefineButton)
+
+    try:
+      slicer.modules.registrationPlugins
+    except AttributeError:
+      slicer.modules.registrationPlugins = {}
+
+    self.localRefinementMethodBox = qt.QGroupBox("Local Refinement Method")
+    self.localRefinementMethodBox.setLayout(qt.QFormLayout())
+    self.localRefinementMethodButtons = {}
+    self.localRefinementMethods = slicer.modules.registrationPlugins.keys()
+    self.localRefinementMethods.sort()
+    for localRefinementMethod in self.localRefinementMethods:
+      plugin = slicer.modules.registrationPlugins[localRefinementMethod]
+      if plugin.type == "Refinement":
+        self.localRefinementMethodButtons[localRefinementMethod] = qt.QRadioButton()
+        self.localRefinementMethodButtons[localRefinementMethod].text = plugin.name
+        self.localRefinementMethodButtons[localRefinementMethod].setToolTip(plugin.tooltip)
+        self.localRefinementMethodButtons[localRefinementMethod].connect("clicked()",
+                                  lambda t=localRefinementMethod: self.onLocalRefinementMethod(t))
+        self.localRefinementMethodBox.layout().addWidget(
+                                  self.localRefinementMethodButtons[localRefinementMethod])
+    localRefinementFormLayout.addWidget(self.localRefinementMethodBox)
+
+
+    #
     # Registration Options
     #
     self.registrationCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -208,13 +247,14 @@ class LandmarkRegistrationWidget:
     self.registrationTypes.sort()
     for registrationType in self.registrationTypes:
       plugin = slicer.modules.registrationPlugins[registrationType]
-      self.registrationTypeButtons[registrationType] = qt.QRadioButton()
-      self.registrationTypeButtons[registrationType].text = plugin.name
-      self.registrationTypeButtons[registrationType].setToolTip(plugin.tooltip)
-      self.registrationTypeButtons[registrationType].connect("clicked()",
-                                lambda t=registrationType: self.onRegistrationType(t))
-      self.registrationTypeBox.layout().addWidget(
-                                self.registrationTypeButtons[registrationType])
+      if plugin.type == "Registration":
+        self.registrationTypeButtons[registrationType] = qt.QRadioButton()
+        self.registrationTypeButtons[registrationType].text = plugin.name
+        self.registrationTypeButtons[registrationType].setToolTip(plugin.tooltip)
+        self.registrationTypeButtons[registrationType].connect("clicked()",
+                                  lambda t=registrationType: self.onRegistrationType(t))
+        self.registrationTypeBox.layout().addWidget(
+                                  self.registrationTypeButtons[registrationType])
     registrationFormLayout.addWidget(self.registrationTypeBox)
 
     # connections
@@ -346,6 +386,8 @@ class LandmarkRegistrationWidget:
     state.movingFiducials = self.logic.volumeFiducialList(state.moving)
     state.transformedFiducials = self.logic.volumeFiducialList(state.transformed)
     state.transform = self.transformSelector.currentNode()
+    state.currentLandmarkName = self.landmarksWidget.selectedLandmark
+
     return(state)
 
   def currentVolumeNodes(self):
@@ -412,6 +454,15 @@ class LandmarkRegistrationWidget:
     self.currentRegistrationInterface.create(self.registationState)
     self.currentRegistrationInterface.onLandmarkEndMoving(self.registationState)
 
+  def onLocalRefinementMethod(self,pickedLocalRefinementMethod):
+    """Pick which local refinement method to display"""
+    if self.currentLocalRefinementInterface:
+      self.currentLocalRefinementInterface.destroy()
+    interfaceClass = slicer.modules.registrationPlugins[pickedLocalRefinementMethod]
+    self.currentLocalRefinementInterface = interfaceClass(self.localRefinementCollapsibleButton)
+    # argument registrationState is a callable that gets current state, current same instance is shared for registration and local refinement
+    self.currentLocalRefinementInterface.create(self.registationState)
+
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
     node that are currently displaying a given volumeID"""
@@ -458,6 +509,22 @@ class LandmarkRegistrationWidget:
             displayNode.RemoveAllViewNodeIDs()
             displayNode.AddViewNodeID("__invalid_view_id__")
 
+  def onLocalRefineClicked(self):
+    """Refine the selected landmark"""
+    timing = True
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
+
+    if self.landmarksWidget.selectedLandmark != None :
+      if self.currentLocalRefinementInterface:
+        state = self.registationState()
+        self.currentLocalRefinementInterface.refineLandmark(state)
+      if timing: onLandmarkPickedStart = time.time()
+      self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
+      if timing: onLandmarkPickedEnd = time.time()
+      if timing: print 'Time to update visualization ' + str(onLandmarkPickedEnd - onLandmarkPickedStart) + ' seconds'
+
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
+
   def onLandmarkPicked(self,landmarkName):
     """Jump all slice views such that the selected landmark
     is visible"""
@@ -476,6 +543,10 @@ class LandmarkRegistrationWidget:
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
             if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
+    if landmarkName != None :
+      self.localRefineButton.text = 'Refine landmark ' + landmarkName
+    else:
+      self.localRefineButton.text = 'No landmark selected for refinement'
 
   def onLandmarkMoved(self,landmarkName):
     """Called when a landmark is moved (probably through
@@ -502,6 +573,8 @@ class LandmarkRegistrationWidget:
     # contain subclasses of the RegistrationLib modules
     if self.currentRegistrationInterface:
       self.currentRegistrationInterface.destroy()
+    if self.currentLocalRefinementInterface:
+      self.currentLocalRefinementInterface.destroy()
 
     # now reload the RegistrationLib source code
     # - set source file path
@@ -622,6 +695,8 @@ class LandmarkRegistrationLogic:
   def __init__(self):
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
+    self.cropLogic = slicer.modules.cropvolume.logic()
+
 
   def setFiducialListDisplay(self,fiducialList):
     displayNode = fiducialList.GetDisplayNode()
@@ -883,6 +958,8 @@ class LandmarkRegistrationLogic:
           fiducials.GetNthFiducialPosition(index,point)
           points[volumeNode].InsertNextPoint(point)
     return points
+
+
 
 
 class LandmarkRegistrationTest(unittest.TestCase):
