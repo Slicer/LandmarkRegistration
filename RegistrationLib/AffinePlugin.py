@@ -120,15 +120,3 @@ class AffinePlugin(RegistrationLib.RegistrationPlugin):
     state = self.registationState()
     self.linearMode = mode
     self.onLandmarkMoved(state)
-
-
-
-# Add this plugin to the dictionary of available registrations.
-# Since this module may be discovered before the Editor itself,
-# create the list if it doesn't already exist.
-try:
-  slicer.modules.registrationPlugins
-except AttributeError:
-  slicer.modules.registrationPlugins = {}
-slicer.modules.registrationPlugins['Affine'] = AffinePlugin
-

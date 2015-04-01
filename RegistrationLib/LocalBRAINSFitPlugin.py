@@ -261,15 +261,3 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     print 'Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds'
 
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
-
-
-
-# Add this plugin to the dictionary of available registrations.
-# Since this module may be discovered before the Editor itself,
-# create the list if it doesn't already exist.
-try:
-  slicer.modules.registrationPlugins
-except AttributeError:
-  slicer.modules.registrationPlugins = {}
-slicer.modules.registrationPlugins['LocalBRAINSFit'] = LocalBRAINSFitPlugin
-

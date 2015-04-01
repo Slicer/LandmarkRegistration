@@ -1,3 +1,5 @@
+import importlib
+import logging
 import os
 from __main__ import vtk, qt, ctk, slicer
 import RegistrationLib
@@ -95,3 +97,23 @@ class RegistrationPlugin(object):
   def onLandmarkEndMoving(self,state):
     """Called when the user changes a landmark"""
     pass
+
+
+def registerRegistrationPlugin(name):
+  """Add this plugin to the dictionary of available registrations.
+  Since the plugin may be registered before the Registration module is
+  instantiated, create the list if it doesn't already exist.
+  """
+  try:
+    slicer.modules.registrationPlugins
+  except AttributeError:
+    slicer.modules.registrationPlugins = {}
+
+  try:
+    new_module = importlib.import_module(name)
+  except ImportError, details:
+    logging.warning("LandmarkRegistration: Failed to load '%s' plugin: %s" % (name, details))
+    return
+  className = name.split('.')[-1]
+  pluginName = className.replace('Plugin', '')
+  slicer.modules.registrationPlugins[pluginName] = getattr(new_module, className)

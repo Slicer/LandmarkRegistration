@@ -157,13 +157,3 @@ class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
       raise hell
 
     state.transform.SetAndObserveTransformToParent(self.thinPlateTransform)
-
-
-# Add this plugin to the dictionary of available registrations.
-# Since this module may be discovered before the Editor itself,
-# create the list if it doesn't already exist.
-try:
-  slicer.modules.registrationPlugins
-except AttributeError:
-  slicer.modules.registrationPlugins = {}
-slicer.modules.registrationPlugins['ThinPlate'] = ThinPlatePlugin
