@@ -265,14 +265,5 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
 
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
-
-
-# Add this plugin to the dictionary of available registrations.
-# Since this module may be discovered before the Editor itself,
-# create the list if it doesn't already exist.
-try:
-  slicer.modules.registrationPlugins
-except AttributeError:
-  slicer.modules.registrationPlugins = {}
-slicer.modules.registrationPlugins['LocalBRAINSFit'] = LocalBRAINSFitPlugin
-
+from RegistrationLib import registerRegistrationPlugin
+registerRegistrationPlugin(os.path.splitext(os.path.basename(__file__))[0], globals())

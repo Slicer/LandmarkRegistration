@@ -1,3 +1,5 @@
+import importlib
+import logging
 import os
 from __main__ import vtk, qt, ctk, slicer
 import RegistrationLib
@@ -95,3 +97,68 @@ class RegistrationPlugin(object):
   def onLandmarkEndMoving(self,state):
     """Called when the user changes a landmark"""
     pass
+
+
+def registerPlugin(destpackage, owner, name, globals, suffix='Plugin', verbose=True):
+  """Add plugin identified by ``name`` to the dictionary of available
+  ``owner`` plugins.
+
+  Registered plugins are added into a dictionnary named `<owner>Plugins`
+  available as ``slicer.modules.<owner>Plugins``.
+  e.g ``slicer.modules.registrationPlugins``.
+
+  .. 'note' The dictionnary name is created using lower cased ``owner`` name.
+  .. 'note' The dictionnary is added to ``slicer.modules`` if needed.
+
+  Plugin ``name`` can represent either a `modulename` or a `classname`:
+
+  * `modulename`: This corresponds to the usual :class:`str` passed to the
+  python ``import`` statement. e.g. ``[<pkgname1>.[<pkgname2>.[...]]]<modulename>``.
+
+  * `classname`: A :class:`str` identifying the plugin `class` available in the
+  caller scope.
+
+  The function will first attempt to import ``name`` and look for a `classname`
+  named `modulename` in the imported module. If it fails, the function will
+  lookup for `classname` in the current `globals()`. Finally, if both fail a
+  warning message will be logged.
+  """
+
+  className = name.split('.')[-1]
+  pluginName = className.replace(suffix, '')
+  pluginDictName = "%sPlugins" % owner.lower()
+
+  # Since the plugin may be registered before the ``owner`` module is
+  # instantiated, create the list if it doesn't already exist.
+  if not hasattr(destpackage, pluginDictName):
+    setattr(destpackage, pluginDictName, {})
+  plugins = getattr(destpackage, pluginDictName)
+
+  if pluginName in plugins:
+    if verbose:
+      logging.info("%s plugin '%s' already registered" % (owner, name))
+    return
+
+  # Try to lookup className
+  new_module = globals
+  try:
+    plugins[pluginName] = new_module[className]
+    return
+  except (AttributeError, TypeError):
+    pass
+
+  # Try to import plugin and lookup className
+  try:
+    new_module = importlib.import_module(name)
+    plugins[pluginName] = getattr(new_module, className)
+  except (ImportError, AttributeError), details:
+    logging.warning("%s: Failed to load '%s' plugin: %s" % (owner, name, details))
+
+
+def registerRegistrationPlugin(name, globals=None, verbose=True):
+  """Add plugin identified by ``name`` to the dictionary of available
+  registration plugins ``slicer.modules.registrationPlugins``.
+
+  .. seealso:: :func:`slicer.util.registerPlugin`
+  """
+  registerPlugin(slicer.modules, "Registration", name, globals, verbose=verbose)
