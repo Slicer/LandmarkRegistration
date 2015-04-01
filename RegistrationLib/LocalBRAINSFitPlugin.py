@@ -126,6 +126,9 @@ class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
     if self.VerboseMode == "Verbose":
       timing = True
 
+    if state.logic.cropLogic is None:
+      print("Cannot refine landmarks. CropVolume module is not available.")
+
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
       print "Cannot refine landmarks. Images or landmarks not selected."
       return
