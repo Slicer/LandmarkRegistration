@@ -99,36 +99,68 @@ class RegistrationPlugin(object):
     pass
 
 
-def registerPlugin(destpackage, owner, name, globals, suffix='Plugin', verbose=True):
+def registerPlugin(destpackage, consumer, name, globals, provider, suffix='Plugin', verbose=True):
   """Add plugin identified by ``name`` to the dictionary of available
-  ``owner`` plugins.
+  ``consumer`` plugins.
 
-  Registered plugins are added into a dictionnary named `<owner>Plugins`
-  available as ``slicer.modules.<owner>Plugins``.
+  :param destpackage:
+    Name of the package that will host the plugin dictionary. E.g ``slicer.modules``.
+  :type destpackage:
+    :class:`basestring`
+
+  :param consumer:
+    Name of the plugin familly. E.g `DICOM`, `Editor` or `Registration`.
+  :type consumer:
+    :class:`basestring`
+
+  :param name:
+    Name of the plugin to register. can represent either a `modulename` or
+    a `classname`:
+      * `modulename`: This corresponds to the usual :class:`basestring` passed to the
+      python ``import`` statement. e.g. ``[<pkgname1>.[<pkgname2>.[...]]]<modulename>``.
+
+      * `classname`: A :class:`basestring` identifying the plugin `class`
+      available in the caller scope identified by ``globals``.
+  :type name:
+    :class:`basestring`
+
+  :param globals:
+    Dictionary representing the scope in which a module classname should be
+    looked up if it couldn't be imported.
+  :type globals:
+    :class:`dict`
+
+  :param provider:
+    Name of the module registering the plugin.
+  :type provider:
+    :class:`basestring`
+
+  :param suffix:
+    Represent the string that should be removed from the plugin ``name`` when
+    adding an entry in the plugin dictionary.
+  :type suffix:
+    :class:`basestring`
+
+  Registered plugins are added into a dictionary named `<consumer>Plugins`
+  available as ``<destpackage>.<consumer>Plugins``.
   e.g ``slicer.modules.registrationPlugins``.
 
-  .. 'note' The dictionnary name is created using lower cased ``owner`` name.
-  .. 'note' The dictionnary is added to ``slicer.modules`` if needed.
+  .. 'note' The dictionary name is created using lower cased ``consumer`` name.
+  .. 'note' The dictionary is added to ``<destpackage>`` if needed.
 
-  Plugin ``name`` can represent either a `modulename` or a `classname`:
-
-  * `modulename`: This corresponds to the usual :class:`str` passed to the
-  python ``import`` statement. e.g. ``[<pkgname1>.[<pkgname2>.[...]]]<modulename>``.
-
-  * `classname`: A :class:`str` identifying the plugin `class` available in the
-  caller scope.
-
-  The function will first attempt to import ``name`` and look for a `classname`
-  named `modulename` in the imported module. If it fails, the function will
-  lookup for `classname` in the current `globals()`. Finally, if both fail a
-  warning message will be logged.
+  The function will first attempt to lookup for `classname` is the ``globals``
+  dictionnary. If it fails, the function will import ``name`` and look for a
+  `classname` named `modulename` in the imported module. Finally, if both fail
+  a warning message will be logged.
   """
 
   className = name.split('.')[-1]
   pluginName = className.replace(suffix, '')
-  pluginDictName = "%sPlugins" % owner.lower()
+  consumer = consumer.lower()
+  pluginDictName = "%sPlugins" % consumer
+  provider = provider if provider else owner
 
-  # Since the plugin may be registered before the ``owner`` module is
+  # Since the plugin may be registered before the ``consumer`` module is
   # instantiated, create the list if it doesn't already exist.
   if not hasattr(destpackage, pluginDictName):
     setattr(destpackage, pluginDictName, {})
@@ -136,7 +168,7 @@ def registerPlugin(destpackage, owner, name, globals, suffix='Plugin', verbose=T
 
   if pluginName in plugins:
     if verbose:
-      logging.info("%s plugin '%s' already registered" % (owner, name))
+      logging.info("%s: %s plugin '%s' already registered" % (provider, consumer, name))
     return
 
   # Try to lookup className
@@ -152,13 +184,13 @@ def registerPlugin(destpackage, owner, name, globals, suffix='Plugin', verbose=T
     new_module = importlib.import_module(name)
     plugins[pluginName] = getattr(new_module, className)
   except (ImportError, AttributeError), details:
-    logging.warning("%s: Failed to load '%s' plugin: %s" % (owner, name, details))
+    logging.warning("%s: Failed to load '%s' %s plugin: %s" % (provider, name, consumer, details))
 
 
-def registerRegistrationPlugin(name, globals=None, verbose=True):
+def registerRegistrationPlugin(name, globals=None, provider="LandmarkRegistration", verbose=True):
   """Add plugin identified by ``name`` to the dictionary of available
   registration plugins ``slicer.modules.registrationPlugins``.
 
   .. seealso:: :func:`slicer.util.registerPlugin`
   """
-  registerPlugin(slicer.modules, "Registration", name, globals, verbose=verbose)
+  registerPlugin(slicer.modules, "Registration", name, globals, provider=provider, verbose=verbose)
