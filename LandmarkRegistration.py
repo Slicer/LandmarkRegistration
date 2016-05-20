@@ -113,7 +113,7 @@ class LandmarkRegistrationWidget:
       self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
       # reload and run specific tests
-      scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking")
+      scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking", "ManyLandmarks")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
@@ -483,6 +483,7 @@ class LandmarkRegistrationWidget:
     for the volume on which they were defined.
     Also turn off other fiducial lists, since leaving
     them visible can interfere with picking."""
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
@@ -508,6 +509,7 @@ class LandmarkRegistrationWidget:
             displayNode.SetVisibility(False)
             displayNode.RemoveAllViewNodeIDs()
             displayNode.AddViewNodeID("__invalid_view_id__")
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
   def onLocalRefineClicked(self):
     """Refine the selected landmark"""
@@ -916,6 +918,7 @@ class LandmarkRegistrationLogic:
     This can be used when responding to new fiducials added to the scene.
     Returns the most recently added landmark (or None).
     """
+    slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     addedLandmark = None
     for volumeNode in volumeNodes:
       fiducialList = self.volumeFiducialList(volumeNode)
@@ -936,6 +939,7 @@ class LandmarkRegistrationLogic:
             addedFiducial = self.ensureFiducialInListForVolume(otherVolumeNode,landmarkName,landmarkPosition)
             if addedFiducial:
               addedLandmark = addedFiducial
+    slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
     return addedLandmark
 
   def vtkPointsForVolumes(self, volumeNodes, fiducialNodes):
@@ -1062,10 +1066,14 @@ class LandmarkRegistrationTest(unittest.TestCase):
       self.test_LandmarkRegistrationThinPlate()
     elif scenario == "VTKv6Picking":
       self.test_LandmarkRegistrationVTKv6Picking()
+    elif scenario == "ManyLandmarks":
+      self.test_LandmarkRegistrationManyLandmarks()
     else:
       self.test_LandmarkRegistrationBasic()
       self.test_LandmarkRegistrationAffine()
       self.test_LandmarkRegistrationThinPlate()
+      self.test_LandmarkRegistrationVTKv6Picking()
+      self.test_LandmarkRegistrationManyLandmarks()
 
   def test_LandmarkRegistrationBasic(self):
     """
@@ -1218,7 +1226,6 @@ class LandmarkRegistrationTest(unittest.TestCase):
 
     w = slicer.modules.LandmarkRegistrationWidget
     w.setupDialog()
-
     w.volumeDialogSelectors["Fixed"].setCurrentNode(fixed)
     w.volumeDialogSelectors["Moving"].setCurrentNode(moving)
     w.onVolumeDialogApply()
@@ -1279,3 +1286,65 @@ class LandmarkRegistrationTest(unittest.TestCase):
     self.delayDisplay('moved to %s' % globalPoint, 200 )
 
     self.delayDisplay('test_LandmarkRegistrationVTKv6Picking passed!')
+
+  def test_LandmarkRegistrationManyLandmarks(self):
+    """
+    This tests basic landmarking with two volumes
+    """
+
+    self.delayDisplay("Starting test_LandmarkRegistrationManyLandmarks")
+    #
+    # first, get some data
+    #
+    import SampleData
+    sampleDataLogic = SampleData.SampleDataLogic()
+    mrHead = sampleDataLogic.downloadMRHead()
+    dtiBrain = sampleDataLogic.downloadDTIBrain()
+    self.delayDisplay('Two data sets loaded')
+
+    mainWindow = slicer.util.mainWindow()
+    mainWindow.moduleSelector().selectModule('LandmarkRegistration')
+
+    w = slicer.modules.LandmarkRegistrationWidget
+    w.setupDialog()
+    w.volumeDialogSelectors["Fixed"].setCurrentNode(dtiBrain)
+    w.volumeDialogSelectors["Moving"].setCurrentNode(mrHead)
+    w.onVolumeDialogApply()
+
+    self.delayDisplay('Volumes set up',100)
+
+    logic = LandmarkRegistrationLogic()
+
+
+    # move the mouse to the middle of the widget so that the first
+    # mouse move event will be exactly over the fiducial to simplify
+    # breakpoints in mouse move callbacks.
+    layoutManager = slicer.app.layoutManager()
+    fixedAxialView = layoutManager.sliceWidget('MRHead-Axial').sliceView()
+    center = (fixedAxialView.width/2, fixedAxialView.height/2)
+    offset = map(lambda element: element+5, center)
+    # enter picking mode
+    w.landmarksWidget.addLandmark()
+    self.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
+    self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
+
+    import time, math
+    times = []
+    startTime = time.time()
+    for row in range(15):
+      for column in range(15):
+        pointTime = time.time()
+        flip = int(math.pow(-1, row))
+        clickPoint = (fixedAxialView.width/2+5*row*flip, fixedAxialView.height/2+5*column*flip)
+        offset = map(lambda element: element+5, clickPoint)
+        # enter picking mode
+        w.landmarksWidget.addLandmark()
+        self.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)
+        pointElapsed = str(time.time() - pointTime)
+        self.delayDisplay('Clicked at ' + str(clickPoint) + ' ' + pointElapsed)
+        times.append((pointElapsed, clickPoint))
+    self.delayDisplay('Total time ' + str(time.time() - startTime))
+    self.delayDisplay(str(times))
+
+
+    self.delayDisplay('test_LandmarkRegistrationManyLandmarks passed!')
