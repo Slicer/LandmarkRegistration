@@ -697,7 +697,9 @@ class LandmarkRegistrationLogic:
   def __init__(self):
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
-    self.cropLogic = slicer.modules.cropvolume.logic()
+    self.cropLogic = None
+    if hasattr(slicer.modules, 'cropvolume'):
+      self.cropLogic = slicer.modules.cropvolume.logic()
 
 
   def setFiducialListDisplay(self,fiducialList):
