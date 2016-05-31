@@ -1,7 +1,7 @@
-from __main__ import vtk, qt, ctk, slicer
-import RegistrationLib
+import qt, slicer
+from . import pqWidget
 
-class LandmarksWidget(RegistrationLib.pqWidget):
+class LandmarksWidget(pqWidget):
   """
   A "QWidget"-like class that manages a set of landmarks
   that are pairs of fiducials

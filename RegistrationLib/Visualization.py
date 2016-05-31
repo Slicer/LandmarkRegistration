@@ -1,7 +1,7 @@
-from __main__ import vtk, qt, ctk, slicer
-import RegistrationLib
+import qt, ctk, slicer
+from . import pqWidget
 
-class VisualizationWidget(RegistrationLib.pqWidget):
+class VisualizationWidget(pqWidget):
   """
   A "QWidget"-like class that manages some of the viewer options
   used during registration
