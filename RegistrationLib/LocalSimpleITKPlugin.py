@@ -1,7 +1,5 @@
 import os
 import time
-import SimpleITK as sitk
-import sitkUtils
 from contextlib import contextmanager
 from __main__ import vtk, qt, ctk, slicer
 import RegistrationLib
@@ -55,6 +53,11 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
   # used for reloading - every concrete class should include this
   sourceFile = __file__
 
+  # To avoid the overhead of importing SimpleITK during application
+  # startup, the import of SimpleITK is delayed until it is needed.
+  sitk = None
+  sitkUtils = None
+
   def __init__(self,parent=None):
     super(LocalSimpleITKPlugin,self).__init__(parent)
 
@@ -62,6 +65,12 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     """Make the plugin-specific user interface"""
     super(LocalSimpleITKPlugin,self).create(registationState)
 
+    # To avoid the overhead of importing SimpleITK during application
+    # startup, the import of SimpleITK is delayed until it is needed.
+    global sitk
+    import SimpleITK as sitk
+    global sitkUtils
+    import sitkUtils
 
     self.LocalSimpleITKMode = "Small"
     self.VerboseMode = "Quiet"
