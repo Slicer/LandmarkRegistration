@@ -1,8 +1,6 @@
-import os
 import time
-from contextlib import contextmanager
-from __main__ import vtk, qt, ctk, slicer
-import RegistrationLib
+import qt, ctk, slicer
+from . import RegistrationPlugin
 
 
 #########################################################
@@ -26,7 +24,7 @@ comment = """
 # RegistrationPlugin
 #
 
-class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
+class LocalSimpleITKPlugin(RegistrationPlugin):
   """ Plugin to perform local refinement of a single landmark
   """
 
@@ -71,6 +69,7 @@ class LocalSimpleITKPlugin(RegistrationLib.RegistrationPlugin):
     import SimpleITK as sitk
     global sitkUtils
     import sitkUtils
+    print("LocalSimpleITKPlugin.create")
 
     self.LocalSimpleITKMode = "Small"
     self.VerboseMode = "Quiet"

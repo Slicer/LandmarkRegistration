@@ -1,6 +1,5 @@
-import os
-from __main__ import vtk, qt, ctk, slicer
-import RegistrationLib
+import vtk, qt, ctk, slicer
+from . import RegistrationPlugin
 
 
 #########################################################
@@ -24,7 +23,7 @@ comment = """
 # RegistrationPlugin
 #
 
-class ThinPlatePlugin(RegistrationLib.RegistrationPlugin):
+class ThinPlatePlugin(RegistrationPlugin):
   """ Plugin for thin plat spline using vtk
   """
 

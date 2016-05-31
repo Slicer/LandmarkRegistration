@@ -1,7 +1,6 @@
-import os
 import time
-from __main__ import vtk, qt, ctk, slicer
-import RegistrationLib
+import vtk, qt, ctk, slicer
+from . import RegistrationPlugin
 
 
 #########################################################
@@ -25,7 +24,7 @@ comment = """
 # RegistrationPlugin
 #
 
-class LocalBRAINSFitPlugin(RegistrationLib.RegistrationPlugin):
+class LocalBRAINSFitPlugin(RegistrationPlugin):
   """ Plugin to perform local refinement of a single landmark
   """
 
