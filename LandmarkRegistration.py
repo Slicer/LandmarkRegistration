@@ -482,14 +482,21 @@ class LandmarkRegistrationWidget:
     """Set fiducials so they only show up in the view
     for the volume on which they were defined.
     Also turn off other fiducial lists, since leaving
-    them visible can interfere with picking."""
+    them visible can interfere with picking.
+    Since multiple landmarks will be in the same lists, keep track of the
+    lists that have been processed to avoid duplicated updates.
+    """
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     volumeNodes = self.currentVolumeNodes()
     if self.sliceNodesByViewName:
       landmarks = self.logic.landmarksForVolumes(volumeNodes)
       activeFiducialLists = []
+      processedFiducialLists = []
       for landmarkName in landmarks:
         for fiducialList,index in landmarks[landmarkName]:
+          if fiducialList in processedFiducialLists:
+            continue
+          processedFiducialLists.append(fiducialList)
           activeFiducialLists.append(fiducialList)
           displayNode = fiducialList.GetDisplayNode()
           displayNode.RemoveAllViewNodeIDs()
@@ -1333,8 +1340,8 @@ class LandmarkRegistrationTest(unittest.TestCase):
     import time, math
     times = []
     startTime = time.time()
-    for row in range(15):
-      for column in range(15):
+    for row in range(5):
+      for column in range(5):
         pointTime = time.time()
         flip = int(math.pow(-1, row))
         clickPoint = (fixedAxialView.width/2+5*row*flip, fixedAxialView.height/2+5*column*flip)
