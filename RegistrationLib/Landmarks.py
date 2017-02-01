@@ -1,4 +1,4 @@
-import qt, slicer
+import qt, slicer, os
 from . import pqWidget
 
 class LandmarksWidget(pqWidget):
@@ -13,7 +13,7 @@ class LandmarksWidget(pqWidget):
     self.volumeNodes = []
     self.selectedLandmark = None # a landmark name
     self.landmarkGroupBox = None # a QGroupBox
-    self.buttons = {} # the current buttons in the group box
+    self.labels = {} # the current buttons in the group box
     self.pendingUpdate = False # update on new scene nodes
     self.updatingFiducials = False # don't update while update in process
     self.observerTags = [] # for monitoring fiducial changes
@@ -41,34 +41,53 @@ class LandmarksWidget(pqWidget):
     self.landmarkGroupBox.setLayout(qt.QFormLayout())
     # add the action buttons at the top
     actionButtons = qt.QHBoxLayout()
+    # add button - http://www.clipartbest.com/clipart-jTxpEM8Bc
     self.addButton = qt.QPushButton("Add")
+    self.addButton.setIcon(qt.QIcon(os.path.join(os.path.dirname(slicer.modules.landmarkregistration.path), 'Resources/Icons/', "icon_Add.png")))
     self.addButton.connect('clicked()', self.addLandmark)
     actionButtons.addWidget(self.addButton)
-    self.removeButton = qt.QPushButton("Remove")
-    self.removeButton.connect('clicked()', self.removeLandmark)
-    self.removeButton.enabled = False
-    actionButtons.addWidget(self.removeButton)
     self.renameButton = qt.QPushButton("Rename")
     self.renameButton.connect('clicked()', self.renameLandmark)
     self.renameButton.enabled = False
     actionButtons.addWidget(self.renameButton)
     self.landmarkGroupBox.layout().addRow(actionButtons)
 
-    # for now, hide these
-    #self.addButton.hide()
-    self.removeButton.hide()
+    # for now, hide
     self.renameButton.hide()
 
     # make a button for each current landmark
-    self.buttons = {}
+    self.labels = {}
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
     keys = landmarks.keys()
     keys.sort()
     for landmarkName in keys:
-      button = qt.QPushButton(landmarkName)
-      button.connect('clicked()', lambda l=landmarkName: self.pickLandmark(l))
-      self.landmarkGroupBox.layout().addRow( button )
-      self.buttons[landmarkName] = button
+      row = qt.QWidget()
+      rowLayout = qt.QHBoxLayout()
+      rowLayout.setMargin(0)
+
+      label = qt.QLabel(landmarkName)
+      rowLayout.addWidget(label, 8)
+
+      # active button - https://thenounproject.com/term/crosshair/4434/
+      activeButton = qt.QPushButton()
+      activeButton.setIcon(qt.QIcon(os.path.join(os.path.dirname(slicer.modules.landmarkregistration.path), 'Resources/Icons/', "icon_Active.png")))
+      activeButton.connect('clicked()', lambda l=landmarkName: self.pickLandmark(l))
+      rowLayout.addWidget(activeButton, 1)
+
+      if landmarkName == self.selectedLandmark:
+        label.setStyleSheet("QWidget{font-weight: bold;}")
+        activeButton.setEnabled(False)
+
+      # remove button - http://findicons.com/icon/158288/trash_recyclebin_empty_closed_w
+      removeButton = qt.QPushButton()
+      removeButton.setIcon(qt.QIcon(os.path.join(os.path.dirname(slicer.modules.landmarkregistration.path), 'Resources/Icons/', "icon_Trash.png")))
+      removeButton.connect('clicked()', lambda l=landmarkName: self.removeLandmark(l))
+      rowLayout.addWidget(removeButton, 1)
+
+      row.setLayout(rowLayout)
+
+      self.landmarkGroupBox.layout().addRow( row )
+      self.labels[landmarkName] = [label, activeButton]
     self.landmarkArrayHolder.layout().addWidget(self.landmarkGroupBox)
 
     # observe manipulation of the landmarks
@@ -121,17 +140,17 @@ class LandmarksWidget(pqWidget):
     self.observerTags = []
 
   def pickLandmark(self,landmarkName,clearMovingView=True):
-    """Hightlight the named landmark button and emit
-    a 'signal'"""
-    for key in self.buttons.keys():
-      self.buttons[key].text = key
+    """Hightlight the named landmark button and emit a 'signal'"""
+    for key in self.labels.keys():
+      self.labels[key][0].setStyleSheet("QWidget{font-weight: normal;}")
+      self.labels[key][1].setEnabled(True)
     try:
-      self.buttons[landmarkName].text = '*' + landmarkName
+      self.labels[landmarkName][0].setStyleSheet("QWidget{font-weight: bold;}")
+      self.labels[landmarkName][1].setEnabled(False)
     except KeyError:
       pass
     self.selectedLandmark = landmarkName
     self.renameButton.enabled = True
-    self.removeButton.enabled = True
     if clearMovingView:
       self.movingView = None
     self.emit("landmarkPicked(landmarkName)", (landmarkName,))
@@ -148,9 +167,10 @@ class LandmarksWidget(pqWidget):
     interactionNode = applicationLogic.GetInteractionNode()
     interactionNode.SwitchToSinglePlaceMode()
 
-  def removeLandmark(self):
-    self.logic.removeLandmarkForVolumes(self.selectedLandmark, self.volumeNodes)
-    self.selectedLandmark = None
+  def removeLandmark(self, landmarkName):
+    self.logic.removeLandmarkForVolumes(landmarkName, self.volumeNodes)
+    if landmarkName == self.selectedLandmark:
+      self.selectedLandmark = None
     self.updateLandmarkArray()
 
   def renameLandmark(self):
