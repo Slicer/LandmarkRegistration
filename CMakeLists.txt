@@ -26,6 +26,10 @@ set(MODULE_PYTHON_SCRIPTS
   )
 
 set(MODULE_PYTHON_RESOURCES
+  Resources/Icons/LandmarkRegistration.png
+  Resources/Icons/icon_Add.png
+  Resources/Icons/icon_Active.png
+  Resources/Icons/icon_Trash.png
   )
 
 #-----------------------------------------------------------------------------
