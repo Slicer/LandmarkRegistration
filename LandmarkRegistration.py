@@ -1288,7 +1288,12 @@ class LandmarkRegistrationTest(unittest.TestCase):
       qt.QCursor().setPos(globalPoint)
     else:
       # generate the event
-      mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
+      try:
+        # Qt5 expects localPos as QPointF
+        mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,qt.QPointF(globalPoint),0,0,0)
+      except ValueError:
+        # Qt4 expects localPos as QPoint
+        mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
       fixedAxialView.VTKWidget().mouseMoveEvent(mouseEvent)
 
     self.delayDisplay('moved to %s' % globalPoint, 200 )
