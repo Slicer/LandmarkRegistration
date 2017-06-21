@@ -58,8 +58,7 @@ Please refer to <a href=\"$a/Documentation/$b.$c/Modules/LandmarkRegistration\">
 class LandmarkRegistrationWidget:
   """The module GUI widget"""
   def __init__(self, parent = None):
-    settings = qt.QSettings()
-    self.developerMode = settings.value('Developer/DeveloperMode').lower() == 'true'
+    self.developerMode = slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool)
     self.logic = LandmarkRegistrationLogic()
     self.logic.registationState = self.registationState
     self.sliceNodesByViewName = {}
