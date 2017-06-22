@@ -58,8 +58,7 @@ Please refer to <a href=\"$a/Documentation/$b.$c/Modules/LandmarkRegistration\">
 class LandmarkRegistrationWidget:
   """The module GUI widget"""
   def __init__(self, parent = None):
-    settings = qt.QSettings()
-    self.developerMode = settings.value('Developer/DeveloperMode').lower() == 'true'
+    self.developerMode = slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool)
     self.logic = LandmarkRegistrationLogic()
     self.logic.registationState = self.registationState
     self.sliceNodesByViewName = {}
@@ -1289,7 +1288,12 @@ class LandmarkRegistrationTest(unittest.TestCase):
       qt.QCursor().setPos(globalPoint)
     else:
       # generate the event
-      mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
+      try:
+        # Qt5 expects localPos as QPointF
+        mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,qt.QPointF(globalPoint),0,0,0)
+      except ValueError:
+        # Qt4 expects localPos as QPoint
+        mouseEvent = qt.QMouseEvent(qt.QEvent.MouseMove,globalPoint,0,0,0)
       fixedAxialView.VTKWidget().mouseMoveEvent(mouseEvent)
 
     self.delayDisplay('moved to %s' % globalPoint, 200 )
