@@ -52,9 +52,9 @@ class ThinPlatePlugin(RegistrationPlugin):
 
     self.thinPlateTransform = None
 
-  def create(self,registationState):
+  def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(ThinPlatePlugin,self).create(registationState)
+    super(ThinPlatePlugin,self).create(registrationState)
     #
     # Thin Plate Spline Registration Pane
     #
@@ -82,7 +82,7 @@ class ThinPlatePlugin(RegistrationPlugin):
 
   def onExportGrid(self):
     """Converts the current thin plate transform to a grid"""
-    state = self.registationState()
+    state = self.registrationState()
 
     # since the transform is ras-to-ras, we find the extreme points
     # in ras space of the fixed (target) volume and fix the unoriented
@@ -130,7 +130,7 @@ class ThinPlatePlugin(RegistrationPlugin):
 
   def onThinPlateApply(self):
     """Call this whenever thin plate needs to be calculated"""
-    state = self.registationState()
+    state = self.registrationState()
 
     if state.fixed and state.moving and state.transformed:
       landmarks = state.logic.landmarksForVolumes((state.fixed, state.moving))

@@ -54,9 +54,9 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
   def __init__(self,parent=None):
     super(LocalBRAINSFitPlugin,self).__init__(parent)
 
-  def create(self,registationState):
+  def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(LocalBRAINSFitPlugin,self).create(registationState)
+    super(LocalBRAINSFitPlugin,self).create(registrationState)
 
 
     self.LocalBRAINSFitMode = "Small"

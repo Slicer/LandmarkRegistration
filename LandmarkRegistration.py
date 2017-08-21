@@ -60,7 +60,7 @@ class LandmarkRegistrationWidget:
   def __init__(self, parent = None):
     self.developerMode = slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool)
     self.logic = LandmarkRegistrationLogic()
-    self.logic.registationState = self.registationState
+    self.logic.registrationState = self.registrationState
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
@@ -373,7 +373,7 @@ class LandmarkRegistrationWidget:
       obj.RemoveObserver(tag)
     self.observerTags = []
 
-  def registationState(self):
+  def registrationState(self):
     """Return an instance of RegistrationState populated
     with current gui parameters"""
     state = RegistrationLib.RegistrationState()
@@ -449,9 +449,9 @@ class LandmarkRegistrationWidget:
       self.currentRegistrationInterface.destroy()
     interfaceClass = slicer.modules.registrationPlugins[pickedRegistrationType]
     self.currentRegistrationInterface = interfaceClass(self.registrationCollapsibleButton)
-    # argument registationState is a callable that gets current state
-    self.currentRegistrationInterface.create(self.registationState)
-    self.currentRegistrationInterface.onLandmarkEndMoving(self.registationState)
+    # argument registrationState is a callable that gets current state
+    self.currentRegistrationInterface.create(self.registrationState)
+    self.currentRegistrationInterface.onLandmarkEndMoving(self.registrationState)
 
   def onLocalRefinementMethod(self,pickedLocalRefinementMethod):
     """Pick which local refinement method to display"""
@@ -460,7 +460,7 @@ class LandmarkRegistrationWidget:
     interfaceClass = slicer.modules.registrationPlugins[pickedLocalRefinementMethod]
     self.currentLocalRefinementInterface = interfaceClass(self.localRefinementCollapsibleButton)
     # argument registrationState is a callable that gets current state, current same instance is shared for registration and local refinement
-    self.currentLocalRefinementInterface.create(self.registationState)
+    self.currentLocalRefinementInterface.create(self.registrationState)
 
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
@@ -524,7 +524,7 @@ class LandmarkRegistrationWidget:
 
     if self.landmarksWidget.selectedLandmark != None :
       if self.currentLocalRefinementInterface:
-        state = self.registationState()
+        state = self.registrationState()
         self.currentLocalRefinementInterface.refineLandmark(state)
       if timing: onLandmarkPickedStart = time.time()
       self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
@@ -561,13 +561,13 @@ class LandmarkRegistrationWidget:
     manipulation of the widget in the slice view).
     This updates the active registration"""
     if self.currentRegistrationInterface:
-      state = self.registationState()
+      state = self.registrationState()
       self.currentRegistrationInterface.onLandmarkMoved(state)
 
   def onLandmarkEndMoving(self,landmarkName):
     """Called when a landmark is done being moved (e.g. when mouse button released)"""
     if self.currentRegistrationInterface:
-      state = self.registationState()
+      state = self.registrationState()
       self.currentRegistrationInterface.onLandmarkEndMoving(state)
 
   def onReload(self,moduleName="LandmarkRegistration"):
@@ -782,7 +782,7 @@ class LandmarkRegistrationLogic:
     moving volume in the current state, then assign the movingPosition
     (this way it can account for the current transform).
     """
-    state = self.registationState()
+    state = self.registrationState()
     landmarks = self.landmarksForVolumes(volumeNodes)
     index = 0
     while True:
@@ -871,7 +871,7 @@ class LandmarkRegistrationLogic:
     Add the fiducial as a landmark and delete it from the other list.
     Return the name of the last added landmark if it exists.
     """
-    state = self.registationState()
+    state = self.registrationState()
     addedLandmark = None
     volumeNodeIDs = []
     for volumeNode in volumeNodes:

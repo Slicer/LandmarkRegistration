@@ -59,14 +59,14 @@ class RegistrationPlugin(object):
     self.widgets = []
 
 
-  def create(self,registationState):
+  def create(self,registrationState):
     """Call this method from your subclass to manage dynamic layout
     and widget deleting
-    - registationState is a callable object that will give you an instance
+    - registrationState is a callable object that will give you an instance
     of a RegistrationState object that you can use to determine the current
     state of the fixed, moving, and other parameters of the parent gui.
     """
-    self.registationState = registationState
+    self.registrationState = registrationState
     if not self.parent:
       self.parent = slicer.qMRMLWidget()
       self.parent.setLayout(qt.QVBoxLayout())

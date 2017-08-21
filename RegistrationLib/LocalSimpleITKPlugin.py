@@ -59,9 +59,9 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
   def __init__(self,parent=None):
     super(LocalSimpleITKPlugin,self).__init__(parent)
 
-  def create(self,registationState):
+  def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(LocalSimpleITKPlugin,self).create(registationState)
+    super(LocalSimpleITKPlugin,self).create(registrationState)
 
     # To avoid the overhead of importing SimpleITK during application
     # startup, the import of SimpleITK is delayed until it is needed.

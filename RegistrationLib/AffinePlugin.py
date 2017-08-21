@@ -50,9 +50,9 @@ class AffinePlugin(RegistrationPlugin):
   def __init__(self,parent=None):
     super(AffinePlugin,self).__init__(parent)
 
-  def create(self,registationState):
+  def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(AffinePlugin,self).create(registationState)
+    super(AffinePlugin,self).create(registrationState)
 
     self.linearMode = "Rigid"
 
@@ -116,7 +116,7 @@ class AffinePlugin(RegistrationPlugin):
     state.transform.SetAndObserveTransformToParent(landmarkTransform)
 
   def onLinearTransform(self,mode):
-    state = self.registationState()
+    state = self.registrationState()
     self.linearMode = mode
     self.onLandmarkMoved(state)
 
