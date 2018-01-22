@@ -339,7 +339,7 @@ class LandmarkRegistrationWidget:
         volumesLogic = slicer.modules.volumes.logic()
         moving = self.volumeSelectors['Moving'].currentNode()
         transformedName = "%s-transformed" % moving.GetName()
-        transformed = slicer.util.getNode(transformedName)
+        transformed = slicer.mrmlScene.GetFirstNodeByName(transformedName)
         if not transformed:
           transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
         transformed.SetAndObserveTransformNodeID(transform.GetID())
@@ -437,8 +437,8 @@ class LandmarkRegistrationWidget:
     fixedNode = self.volumeSelectors['Fixed'].currentNode()
     transformedNode = self.volumeSelectors['Transformed'].currentNode()
     if transformedNode:
-      compositeNodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
-      for compositeNode in compositeNodes.values():
+      compositeNodes = slicer.util.getNodesByClass('vtkMRMLSliceCompositeNode')
+      for compositeNode in compositeNodes:
         if compositeNode.GetBackgroundVolumeID() == transformedNode.GetID():
           compositeNode.SetForegroundVolumeID(fixedNode.GetID())
           compositeNode.SetForegroundOpacity(0.5)
@@ -465,11 +465,11 @@ class LandmarkRegistrationWidget:
   def updateSliceNodesByVolumeID(self):
     """Build a mapping to a list of slice nodes
     node that are currently displaying a given volumeID"""
-    compositeNodes = slicer.util.getNodes('vtkMRMLSliceCompositeNode*')
+    compositeNodes = slicer.util.getNodesByClass('vtkMRMLSliceCompositeNode')
     self.sliceNodesByVolumeID = {}
     if self.sliceNodesByViewName:
       for sliceNode in self.sliceNodesByViewName.values():
-        for compositeNode in compositeNodes.values():
+        for compositeNode in compositeNodes:
           if compositeNode.GetLayoutName() == sliceNode.GetLayoutName():
             volumeID = compositeNode.GetBackgroundVolumeID()
             if self.sliceNodesByVolumeID.has_key(volumeID):
@@ -507,7 +507,7 @@ class LandmarkRegistrationWidget:
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
                   if hiddenVolume and volumeNodeID == hiddenVolume.GetID():
                     displayNode.SetVisibility(False)
-      allFiducialLists = slicer.util.getNodes('vtkMRMLMarkupsFiducialNode').values()
+      allFiducialLists = slicer.util.getNodesByClass('vtkMRMLMarkupsFiducialNode')
       for fiducialList in allFiducialLists:
         if fiducialList not in activeFiducialLists:
           displayNode = fiducialList.GetDisplayNode()
@@ -733,10 +733,10 @@ class LandmarkRegistrationLogic:
 
     # make the fiducial list if required
     listName = associatedNode.GetName() + "-landmarks"
-    fiducialList = slicer.util.getNode(listName)
+    fiducialList = slicer.mrmlScene.GetFirstNodeByName(listName)
     if not fiducialList:
       fiducialListNodeID = markupsLogic.AddNewFiducialNode(listName,slicer.mrmlScene)
-      fiducialList = slicer.util.getNode(fiducialListNodeID)
+      fiducialList = slicer.mrmlScene.GetNodeByID(fiducialListNodeID)
       if associatedNode:
         fiducialList.SetAttribute("AssociatedNodeID", associatedNode.GetID())
       self.setFiducialListDisplay(fiducialList)
@@ -769,7 +769,7 @@ class LandmarkRegistrationLogic:
     fiducialList.SetNthFiducialSelected(fiducialIndex, False)
     fiducialList.SetNthMarkupLocked(fiducialIndex, False)
 
-    originalActiveList = slicer.util.getNode(originalActiveListID)
+    originalActiveList = slicer.mrmlScene.GetNodeByID(originalActiveListID)
     if originalActiveList:
       markupsLogic.SetActiveListID(originalActiveList)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
@@ -815,7 +815,7 @@ class LandmarkRegistrationLogic:
     if not volumeNode:
       return None
     listName = volumeNode.GetName() + "-landmarks"
-    listNode = slicer.util.getNode(listName)
+    listNode = slicer.mrmlScene.GetFirstNodeByName(listName)
     if listNode:
       if listNode.GetAttribute("AssociatedNodeID") != volumeNode.GetID():
         self.setFiducialListDisplay(listNode)
@@ -877,14 +877,14 @@ class LandmarkRegistrationLogic:
     for volumeNode in volumeNodes:
       volumeNodeIDs.append(volumeNode.GetID())
     landmarksByName = self.landmarksForVolumes(volumeNodes)
-    fiducialListsInScene = slicer.util.getNodes('vtkMRMLMarkupsFiducialNode*')
+    fiducialListsInScene = slicer.util.getNodesByClass('vtkMRMLMarkupsFiducialNode')
     landmarkFiducialLists = []
     for landmarkName in landmarksByName.keys():
       for fiducialList,index in landmarksByName[landmarkName]:
         if fiducialList not in landmarkFiducialLists:
           landmarkFiducialLists.append(fiducialList)
     listIndexToRemove = [] # remove back to front after identifying them
-    for fiducialList in fiducialListsInScene.values():
+    for fiducialList in fiducialListsInScene:
       if fiducialList not in landmarkFiducialLists:
         # this is not one of our fiducial lists, so look for fiducials
         # associated with one of our volumes
@@ -894,7 +894,7 @@ class LandmarkRegistrationLogic:
           if associatedID in volumeNodeIDs:
             # found one, so add it as a landmark
             landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
-            volumeNode = slicer.util.getNode(associatedID)
+            volumeNode = slicer.mrmlScene.GetNodeByID(associatedID)
             # if new fiducial is associated with moving volume,
             # then map the position back to where it would have been
             # if it were not transformed, if not, then calculate where
