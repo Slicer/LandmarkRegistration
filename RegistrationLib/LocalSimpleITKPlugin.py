@@ -84,6 +84,8 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     localSimpleITKCollapsibleButton.setLayout(localSimpleITKFormLayout)
     self.widgets.append(localSimpleITKCollapsibleButton)
 
+    buttonGroup = qt.QButtonGroup()
+    self.widgets.append(buttonGroup)
     buttonLayout = qt.QVBoxLayout()
     localSimpleITKModeButtons = {}
     self.LocalSimpleITKModes = ("Small", "Large")
@@ -92,11 +94,14 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
       localSimpleITKModeButtons[mode].text = mode
       localSimpleITKModeButtons[mode].setToolTip( "Run the refinement in a %s local region." % mode.lower() )
       buttonLayout.addWidget(localSimpleITKModeButtons[mode])
+      buttonGroup.addButton(localSimpleITKModeButtons[mode])
       self.widgets.append(localSimpleITKModeButtons[mode])
       localSimpleITKModeButtons[mode].connect('clicked()', lambda m=mode : self.onLocalSimpleITKMode(m))
     localSimpleITKModeButtons[self.LocalSimpleITKMode].checked = True
     localSimpleITKFormLayout.addRow("Local SimpleITK Mode ", buttonLayout)
 
+    buttonGroup = qt.QButtonGroup()
+    self.widgets.append(buttonGroup)
     buttonLayout = qt.QVBoxLayout()
     verboseModeButtons = {}
     self.VerboseModes = ("Quiet", "Verbose", "Full Verbose")
@@ -105,6 +110,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
       verboseModeButtons[mode].text = mode
       verboseModeButtons[mode].setToolTip( "Run the refinement in %s mode." % mode.lower() )
       buttonLayout.addWidget(verboseModeButtons[mode])
+      buttonGroup.addButton(verboseModeButtons[mode])
       self.widgets.append(verboseModeButtons[mode])
       verboseModeButtons[mode].connect('clicked()', lambda m=mode : self.onVerboseMode(m))
     verboseModeButtons[self.VerboseMode].checked = True
