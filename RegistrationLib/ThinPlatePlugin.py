@@ -58,23 +58,23 @@ class ThinPlatePlugin(RegistrationPlugin):
     #
     # Thin Plate Spline Registration Pane
     #
-    self.thinPlateCollapsibleButton = ctk.ctkCollapsibleButton()
-    self.thinPlateCollapsibleButton.text = "Thin Plate Spline Registration"
+    thinPlateCollapsibleButton = ctk.ctkCollapsibleButton()
+    thinPlateCollapsibleButton.text = "Thin Plate Spline Registration"
     thinPlateFormLayout = qt.QFormLayout()
-    self.thinPlateCollapsibleButton.setLayout(thinPlateFormLayout)
-    self.widgets.append(self.thinPlateCollapsibleButton)
+    thinPlateCollapsibleButton.setLayout(thinPlateFormLayout)
+    self.widgets.append(thinPlateCollapsibleButton)
 
     self.hotUpdateButton = qt.QCheckBox("Hot Update")
     thinPlateFormLayout.addWidget(self.hotUpdateButton)
     self.widgets.append(self.hotUpdateButton)
 
-    self.exportGridButton = qt.QPushButton("Export to Grid Transform")
-    self.exportGridButton.toolTip = "To save this transform or use it in other Slicer modules you can export the current Thin Plate transform to a Grid Transform."
-    thinPlateFormLayout.addWidget(self.exportGridButton)
-    self.exportGridButton.connect("clicked()",self.onExportGrid)
-    self.widgets.append(self.exportGridButton)
+    exportGridButton = qt.QPushButton("Export to Grid Transform")
+    exportGridButton.toolTip = "To save this transform or use it in other Slicer modules you can export the current Thin Plate transform to a Grid Transform."
+    thinPlateFormLayout.addWidget(exportGridButton)
+    exportGridButton.connect("clicked()",self.onExportGrid)
+    self.widgets.append(exportGridButton)
 
-    self.parent.layout().addWidget(self.thinPlateCollapsibleButton)
+    self.parent.layout().addWidget(thinPlateCollapsibleButton)
 
   def destroy(self):
     """Clean up"""
@@ -82,6 +82,7 @@ class ThinPlatePlugin(RegistrationPlugin):
 
   def onExportGrid(self):
     """Converts the current thin plate transform to a grid"""
+    self.hotUpdateButton = None
     state = self.registrationState()
 
     # since the transform is ras-to-ras, we find the extreme points

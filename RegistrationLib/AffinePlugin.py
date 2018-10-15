@@ -61,26 +61,26 @@ class AffinePlugin(RegistrationPlugin):
     # - interface options for linear registration
     # - TODO: move registration code into separate plugins
     #
-    self.linearCollapsibleButton = ctk.ctkCollapsibleButton()
-    self.linearCollapsibleButton.text = "Linear Registration"
+    linearCollapsibleButton = ctk.ctkCollapsibleButton()
+    linearCollapsibleButton.text = "Linear Registration"
     linearFormLayout = qt.QFormLayout()
-    self.linearCollapsibleButton.setLayout(linearFormLayout)
-    self.widgets.append(self.linearCollapsibleButton)
+    linearCollapsibleButton.setLayout(linearFormLayout)
+    self.widgets.append(linearCollapsibleButton)
 
     buttonLayout = qt.QVBoxLayout()
-    self.linearModeButtons = {}
+    linearModeButtons = {}
     self.linearModes = ("Rigid", "Similarity", "Affine")
     for mode in self.linearModes:
-      self.linearModeButtons[mode] = qt.QRadioButton()
-      self.linearModeButtons[mode].text = mode
-      self.linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
-      buttonLayout.addWidget(self.linearModeButtons[mode])
-      self.widgets.append(self.linearModeButtons[mode])
-      self.linearModeButtons[mode].connect('clicked()', lambda m=mode : self.onLinearTransform(m))
-    self.linearModeButtons[self.linearMode].checked = True
+      linearModeButtons[mode] = qt.QRadioButton()
+      linearModeButtons[mode].text = mode
+      linearModeButtons[mode].setToolTip( "Run the registration in %s mode." % mode )
+      buttonLayout.addWidget(linearModeButtons[mode])
+      self.widgets.append(linearModeButtons[mode])
+      linearModeButtons[mode].connect('clicked()', lambda m=mode : self.onLinearTransform(m))
+    linearModeButtons[self.linearMode].checked = True
     linearFormLayout.addRow("Registration Mode ", buttonLayout)
 
-    self.parent.layout().addWidget(self.linearCollapsibleButton)
+    self.parent.layout().addWidget(linearCollapsibleButton)
 
 
   def destroy(self):
