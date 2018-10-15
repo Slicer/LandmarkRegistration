@@ -66,40 +66,46 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     # Local Refinment Pane - initially hidden
     # - interface options for linear registration
     #
-    self.LocalBRAINSFitCollapsibleButton = ctk.ctkCollapsibleButton()
-    self.LocalBRAINSFitCollapsibleButton.text = "Local BRAINSFit"
-    LocalBRAINSFitFormLayout = qt.QFormLayout()
-    self.LocalBRAINSFitCollapsibleButton.setLayout(LocalBRAINSFitFormLayout)
-    self.widgets.append(self.LocalBRAINSFitCollapsibleButton)
+    localBRAINSFitCollapsibleButton = ctk.ctkCollapsibleButton()
+    localBRAINSFitCollapsibleButton.text = "Local BRAINSFit"
+    localBRAINSFitFormLayout = qt.QFormLayout()
+    localBRAINSFitCollapsibleButton.setLayout(localBRAINSFitFormLayout)
+    self.widgets.append(localBRAINSFitCollapsibleButton)
 
+    buttonGroup = qt.QButtonGroup()
+    self.widgets.append(buttonGroup)
     buttonLayout = qt.QVBoxLayout()
-    self.LocalBRAINSFitModeButtons = {}
+    localBRAINSFitModeButtons = {}
     self.LocalBRAINSFitModes = ("Small", "Large")
     for mode in self.LocalBRAINSFitModes:
-      self.LocalBRAINSFitModeButtons[mode] = qt.QRadioButton()
-      self.LocalBRAINSFitModeButtons[mode].text = mode
-      self.LocalBRAINSFitModeButtons[mode].setToolTip( "Run the refinement in a %s local region." % mode.lower() )
-      buttonLayout.addWidget(self.LocalBRAINSFitModeButtons[mode])
-      self.widgets.append(self.LocalBRAINSFitModeButtons[mode])
-      self.LocalBRAINSFitModeButtons[mode].connect('clicked()', lambda m=mode : self.onLocalBRAINSFitMode(m))
-    self.LocalBRAINSFitModeButtons[self.LocalBRAINSFitMode].checked = True
-    LocalBRAINSFitFormLayout.addRow("Local BRAINSFit Mode ", buttonLayout)
+      localBRAINSFitModeButtons[mode] = qt.QRadioButton()
+      localBRAINSFitModeButtons[mode].text = mode
+      localBRAINSFitModeButtons[mode].setToolTip( "Run the refinement in a %s local region." % mode.lower() )
+      buttonLayout.addWidget(localBRAINSFitModeButtons[mode])
+      buttonGroup.addButton(localBRAINSFitModeButtons[mode])
+      self.widgets.append(localBRAINSFitModeButtons[mode])
+      localBRAINSFitModeButtons[mode].connect('clicked()', lambda m=mode : self.onLocalBRAINSFitMode(m))
+    localBRAINSFitModeButtons[self.LocalBRAINSFitMode].checked = True
+    localBRAINSFitFormLayout.addRow("Local BRAINSFit Mode ", buttonLayout)
 
+    buttonGroup = qt.QButtonGroup()
+    self.widgets.append(buttonGroup)
     buttonLayout = qt.QVBoxLayout()
-    self.VerboseModeButtons = {}
+    verboseModeButtons = {}
     self.VerboseModes = ("Quiet", "Verbose")
     for mode in self.VerboseModes:
-      self.VerboseModeButtons[mode] = qt.QRadioButton()
-      self.VerboseModeButtons[mode].text = mode
-      self.VerboseModeButtons[mode].setToolTip( "Run the refinement in %s mode." % mode.lower() )
-      buttonLayout.addWidget(self.VerboseModeButtons[mode])
-      self.widgets.append(self.VerboseModeButtons[mode])
-      self.VerboseModeButtons[mode].connect('clicked()', lambda m=mode : self.onVerboseMode(m))
-    self.VerboseModeButtons[self.VerboseMode].checked = True
-    LocalBRAINSFitFormLayout.addRow("Verbose Mode ", buttonLayout)
+      verboseModeButtons[mode] = qt.QRadioButton()
+      verboseModeButtons[mode].text = mode
+      verboseModeButtons[mode].setToolTip( "Run the refinement in %s mode." % mode.lower() )
+      buttonLayout.addWidget(verboseModeButtons[mode])
+      buttonGroup.addButton(verboseModeButtons[mode])
+      self.widgets.append(verboseModeButtons[mode])
+      verboseModeButtons[mode].connect('clicked()', lambda m=mode : self.onVerboseMode(m))
+    verboseModeButtons[self.VerboseMode].checked = True
+    localBRAINSFitFormLayout.addRow("Verbose Mode ", buttonLayout)
 
 
-    self.parent.layout().addWidget(self.LocalBRAINSFitCollapsibleButton)
+    self.parent.layout().addWidget(localBRAINSFitCollapsibleButton)
 
 
   def destroy(self):

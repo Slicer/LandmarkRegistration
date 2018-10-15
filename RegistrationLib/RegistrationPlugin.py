@@ -82,7 +82,8 @@ class RegistrationPlugin(object):
     """Call this method from your subclass to manage dynamic layout
     and widget deleting"""
     for w in self.widgets:
-      self.parent.layout().removeWidget(w)
+      if w.isWidgetType():
+        self.parent.layout().removeWidget(w)
       w.deleteLater()
       w.setParent(None)
     self.widgets = []
