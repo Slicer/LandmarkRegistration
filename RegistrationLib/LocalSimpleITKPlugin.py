@@ -176,52 +176,55 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     movingPoint = [-movingPoint[0], -movingPoint[1], movingPoint[2]]
 
     # NOTE: SimpleITK index always starts at 0
+    import numpy as np
 
-    # define an roi for the fixed
+    # Minimal image size required by the RecursiveGaussianImageFilter which is used by
+    # the registration framework.
+    minimalROISize = 4
+
+    # define an roi for the fixed point, intersect the ROI defined by the fixedRadius (centered on the fixedPoint)
+    # and the image.
     if timing: roiStart = time.time()
     fixedRadius = 30
-    fixedROISize = [0,]*3
-    fixedROIIndex = [0,]*3
-    fixedROIIndex = list(fixedImage.TransformPhysicalPointToIndex(fixedPoint))
-    for i in range(3):
-      if fixedROIIndex[i] < 0 or fixedROIIndex[i] > fixedImage.GetSize()[i]-1:
+    fixedPointIndex = np.array(fixedImage.TransformPhysicalPointToIndex(fixedPoint))
+    fixedMinIndexes = np.maximum(fixedPointIndex-fixedRadius, [0]*fixedImage.GetDimension())
+    fixedMaxIndexes = np.minimum(fixedPointIndex+fixedRadius, fixedImage.GetSize())
+    fixedROISize = fixedMaxIndexes - fixedMinIndexes
+    # minimal acceptable ROI size required by registration framework.
+    if not all(fixedROISize > minimalROISize):
         import sys
-        sys.stderr.write("Fixed landmark {0} in not with in fixed image!\n".format(landmarkName))
+        sys.stderr.write("Fixed landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
         return
-      radius = min(fixedRadius, fixedROIIndex[i], fixedImage.GetSize()[i]-fixedROIIndex[i]-1)
-      fixedROISize[i] = radius*2+1
-      fixedROIIndex[i] -= radius
-    if self.VerboseMode == "Full Verbose":  print "Fixed ROI: ",fixedROIIndex, fixedROISize
+    if self.VerboseMode == "Full Verbose":  print "Fixed ROI: ",fixedMinIndexes.tolist(), fixedROISize.tolist()
     if timing: roiEnd = time.time()
 
     # crop the fixed
     if timing: cropStart = time.time()
-    croppedFixedImage = sitk.RegionOfInterest( fixedImage, fixedROISize, fixedROIIndex)
+    croppedFixedImage = sitk.RegionOfInterest( fixedImage, fixedROISize.tolist(), fixedMinIndexes.tolist())
     croppedFixedImage = sitk.Cast(croppedFixedImage, sitk.sitkFloat32)
     if timing: cropEnd = time.time()
 
-    # define an roi for the moving
+    # define an roi for the moving point, intersect the ROI defined by the movingRadius (centered on the movingPoint)
+    # and the image.
     if timing: roi2Start = time.time()
     if self.LocalSimpleITKMode == "Small":
       movingRadius = 45
     else:
       movingRadius = 60
-    movingROISize = [0,]*3
-    movingROIIndex = [0,]*3
-    movingROIIndex = list(movingImage.TransformPhysicalPointToIndex(movingPoint))
-    for i in range(3):
-      if movingROIIndex[i] < 0 or movingROIIndex[i] > movingImage.GetSize()[i]-1:
+    movingPointIndex = np.array(movingImage.TransformPhysicalPointToIndex(movingPoint))
+    movingMinIndexes = np.maximum(movingPointIndex-movingRadius, [0]*movingImage.GetDimension())
+    movingMaxIndexes = np.minimum(movingPointIndex+movingRadius, movingImage.GetSize())
+    movingROISize = movingMaxIndexes - movingMinIndexes
+    # minimal acceptable ROI size required by registration framework.
+    if not all(movingROISize > minimalROISize):
         import sys
-        sys.stderr.write("Moving landmark {0} in not with in moving image!\n".format(landmarkName))
+        sys.stderr.write("Moving landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
         return
-      radius = min(movingRadius, movingROIIndex[i], movingImage.GetSize()[i]-movingROIIndex[i]-1)
-      movingROISize[i] = radius*2+1
-      movingROIIndex[i] -= radius
-    if self.VerboseMode == "Full Verbose": print "Moving ROI: ",movingROIIndex, movingROISize
+    if self.VerboseMode == "Full Verbose": print "Moving ROI: ",movingMinIndexes.tolist(), movingROISize.tolist()
     if timing: roi2End = time.time()
 
     if timing: crop2Start = time.time()
-    croppedMovingImage = sitk.RegionOfInterest( movingImage, movingROISize, movingROIIndex)
+    croppedMovingImage = sitk.RegionOfInterest( movingImage, movingROISize.tolist(), movingMinIndexes.tolist())
     croppedMovingImage = sitk.Cast(croppedMovingImage, sitk.sitkFloat32)
     if timing: crop2End = time.time()
 
@@ -232,7 +235,9 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
 
     # initialize the registration
     if timing: initTransformStart = time.time()
-    tx = sitk.CenteredTransformInitializer(croppedFixedImage, croppedMovingImage, sitk.VersorRigid3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
+    tx = sitk.VersorRigid3DTransform()
+    tx.SetCenter(fixedPoint)
+    tx.SetTranslation(np.array(movingPoint) - np.array(fixedPoint))
     if timing: initTransformEnd = time.time()
     if timing: print 'Time to initialize transformation was ' + str(initTransformEnd - initTransformStart) + ' seconds'
 
