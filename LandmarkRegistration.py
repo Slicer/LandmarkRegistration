@@ -1,7 +1,7 @@
 import os, string
-import unittest
 import time
 import vtk, qt, ctk, slicer
+from slicer.ScriptedLoadableModule import *
 
 import RegistrationLib
 
@@ -9,8 +9,9 @@ import RegistrationLib
 # LandmarkRegistration
 #
 
-class LandmarkRegistration:
+class LandmarkRegistration(ScriptedLoadableModule):
   def __init__(self, parent):
+    ScriptedLoadableModule.__init__(self, parent)
     parent.title = "Landmark Registration"
     parent.categories = ["Registration"]
     parent.dependencies = []
@@ -36,29 +37,16 @@ Please refer to <a href=\"$a/Documentation/$b.$c/Modules/LandmarkRegistration\">
     "Quantification of 3D Bony Changes in Temporomandibular Joint Osteoarthritis"
     (TMJ-OA).
     """ # replace with organization, grant and thanks.
-    self.parent = parent
-
-    # Add this test to the SelfTest module's list for discovery when the module
-    # is created.  Since this module may be discovered before SelfTests itself,
-    # create the list if it doesn't already exist.
-    try:
-      slicer.selfTests
-    except AttributeError:
-      slicer.selfTests = {}
-    slicer.selfTests['LandmarkRegistration'] = self.runTest
-
-  def runTest(self):
-    tester = LandmarkRegistrationTest()
-    tester.runTest()
 
 #
 # qLandmarkRegistrationWidget
 #
 
-class LandmarkRegistrationWidget:
+class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
   """The module GUI widget"""
-  def __init__(self, parent = None):
-    self.developerMode = slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool)
+
+  def __init__(self, parent=None):
+    ScriptedLoadableModuleWidget.__init__(self, parent)
     self.logic = LandmarkRegistrationLogic()
     self.logic.registrationState = self.registrationState
     self.sliceNodesByViewName = {}
@@ -69,54 +57,16 @@ class LandmarkRegistrationWidget:
     self.currentRegistrationInterface = None
     self.currentLocalRefinementInterface = None
 
-    if not parent:
-      self.parent = slicer.qMRMLWidget()
-      self.parent.setLayout(qt.QVBoxLayout())
-      self.parent.setMRMLScene(slicer.mrmlScene)
-    else:
-      self.parent = parent
-    self.layout = self.parent.layout()
-    if not parent:
-      self.setup()
-      self.parent.show()
-
   def setup(self):
-    """Instantiate and connect widgets ..."""
+    ScriptedLoadableModuleWidget.setup(self)
 
     if self.developerMode:
-      #
-      # Reload and Test area
-      #
-      """Developer interface"""
-      reloadCollapsibleButton = ctk.ctkCollapsibleButton()
-      reloadCollapsibleButton.text = "Advanced - Reload && Test"
-      reloadCollapsibleButton.collapsed = False
-      self.layout.addWidget(reloadCollapsibleButton)
-      reloadFormLayout = qt.QFormLayout(reloadCollapsibleButton)
-
-      # reload button
-      # (use this during development, but remove it when delivering
-      #  your module to users)
-      self.reloadButton = qt.QPushButton("Reload")
-      self.reloadButton.toolTip = "Reload this module."
-      self.reloadButton.name = "LandmarkRegistration Reload"
-      reloadFormLayout.addWidget(self.reloadButton)
-      self.reloadButton.connect('clicked()', self.onReload)
-
-      # reload and test button
-      # (use this during development, but remove it when delivering
-      #  your module to users)
-      self.reloadAndTestButton = qt.QPushButton("Reload and Test")
-      self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
-      reloadFormLayout.addWidget(self.reloadAndTestButton)
-      self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
-
       # reload and run specific tests
       scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking", "ManyLandmarks")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
         self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
-        reloadFormLayout.addWidget(button)
+        self.reloadCollapsibleButton.layout().addWidget(button)
         button.connect('clicked()', lambda s=scenario: self.onReloadAndTest(scenario=s))
 
     self.selectVolumesButton = qt.QPushButton("Select Volumes To Register")
@@ -575,6 +525,16 @@ class LandmarkRegistrationWidget:
     ModuleWizard will subsitute correct default moduleName.
     Note: customized for use in LandmarkRegistration
     """
+
+    # Print a clearly visible separator to make it easier
+    # to distinguish new error messages (during/after reload)
+    # from old ones.
+    print('\n' * 2)
+    print('-' * 30)
+    print('Reloading module: '+self.moduleName)
+    print('-' * 30)
+    print('\n' * 2)
+
     import imp, sys, os, slicer
 
     # first, destroy the current plugin, since it will
@@ -615,63 +575,13 @@ class LandmarkRegistrationWidget:
       imp.load_source(plugin.__module__, sourceFile)
     oldPlugins = None
 
-    widgetName = moduleName + "Widget"
-
-    # now reload the widget module source code
-    # - set source file path
-    # - load the module to the global space
-    filePath = eval('slicer.modules.%s.path' % moduleName.lower())
-    p = os.path.dirname(filePath)
-    if not sys.path.__contains__(p):
-      sys.path.insert(0,p)
-    fp = open(filePath, "r")
-    globals()[moduleName] = imp.load_module(
-        moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
-    fp.close()
-
-    # rebuild the widget
-    # - find and hide the existing widget
-    # - create a new widget in the existing parent
-    parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent().parent()
-    for child in parent.children():
-      try:
-        child.hide()
-      except AttributeError:
-        pass
-    # Remove spacer items
-    item = parent.layout().itemAt(0)
-    while item:
-      parent.layout().removeItem(item)
-      item = parent.layout().itemAt(0)
-
-    # delete the old widget instance
-    if hasattr(globals()['slicer'].modules, widgetName):
-      getattr(globals()['slicer'].modules, widgetName).cleanup()
-
-    # create new widget inside existing parent
-    globals()[widgetName.lower()] = eval(
-        'globals()["%s"].%s(parent)' % (moduleName, widgetName))
-    globals()[widgetName.lower()].setup()
-    setattr(globals()['slicer'].modules, widgetName, globals()[widgetName.lower()])
-
-  def onReloadAndTest(self,moduleName="LandmarkRegistration",scenario=None):
-    try:
-      self.onReload()
-      evalString = 'globals()["%s"].%sTest()' % (moduleName, moduleName)
-      tester = eval(evalString)
-      tester.runTest(scenario=scenario)
-    except Exception, e:
-      import traceback
-      traceback.print_exc()
-      qt.QMessageBox.warning(slicer.util.mainWindow(),
-          "Reload and Test", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
-
+    slicer.util.reloadScriptedModule("LandmarkRegistration")
 
 #
 # LandmarkRegistrationLogic
 #
 
-class LandmarkRegistrationLogic:
+class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
   """This class should implement all the actual
   computation done by your module.  The interface
   should be such that other python code can import
@@ -701,6 +611,7 @@ class LandmarkRegistrationLogic:
   identify a fiducial.
   """
   def __init__(self):
+    ScriptedLoadableModuleLogic.__init__(self)
     self.linearMode = 'Rigid'
     self.hiddenFiducialVolumes = ()
     self.cropLogic = None
@@ -974,66 +885,10 @@ class LandmarkRegistrationLogic:
 
 
 
-class LandmarkRegistrationTest(unittest.TestCase):
+class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
   """
   This is the test case for your scripted module.
   """
-
-  def delayDisplay(self,message,msec=1000):
-    """This utility method displays a small dialog and waits.
-    This does two things: 1) it lets the event loop catch up
-    to the state of the test so that rendering and widget updates
-    have all taken place before the test continues and 2) it
-    shows the user/developer/tester the state of the test
-    so that we'll know when it breaks.
-    """
-    print(message)
-    self.info = qt.QDialog()
-    self.infoLayout = qt.QVBoxLayout()
-    self.info.setLayout(self.infoLayout)
-    self.label = qt.QLabel(message,self.info)
-    self.infoLayout.addWidget(self.label)
-    qt.QTimer.singleShot(msec, self.info.close)
-    self.info.exec_()
-
-  def clickAndDrag(self,widget,button='Left',start=(10,10),end=(10,40),steps=20,modifiers=[]):
-    """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
-    button : "Left", "Middle", "Right", or "None"
-    start, end : window coordinates for action
-    steps : number of steps to move in
-    modifiers : list containing zero or more of "Shift" or "Control"
-    """
-    style = widget.interactorStyle()
-    interator = style.GetInteractor()
-    if button == 'Left':
-      down = style.OnLeftButtonDown
-      up = style.OnLeftButtonUp
-    elif button == 'Right':
-      down = style.OnRightButtonDown
-      up = style.OnRightButtonUp
-    elif button == 'Middle':
-      down = style.OnMiddleButtonDown
-      up = style.OnMiddleButtonUp
-    elif button == 'None' or not button:
-      down = lambda : None
-      up = lambda : None
-    else:
-      raise Exception("Bad button - should be Left or Right, not %s" % button)
-    if 'Shift' in modifiers:
-      interator.SetShiftKey(1)
-    if 'Control' in modifiers:
-      interator.SetControlKey(1)
-    interator.SetEventPosition(*start)
-    down()
-    for step in xrange(steps):
-      frac = float(step+1)/steps
-      x = int(start[0] + frac*(end[0]-start[0]))
-      y = int(start[1] + frac*(end[1]-start[1]))
-      interator.SetEventPosition(x,y)
-      style.OnMouseMove()
-    up()
-    interator.SetShiftKey(0)
-    interator.SetControlKey(0)
 
   def moveMouse(self,widget,start=(10,10),end=(10,40),steps=20,modifiers=[]):
     """Send synthetic mouse events to the specified widget (qMRMLSliceWidget or qMRMLThreeDView)
@@ -1092,10 +947,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     #
     # first, get some data
     #
-    import SampleData
-    sampleDataLogic = SampleData.SampleDataLogic()
-    mrHead = sampleDataLogic.downloadMRHead()
-    dtiBrain = sampleDataLogic.downloadDTIBrain()
+    from SampleData import SampleDataLogic
+    mrHead = SampleDataLogic().downloadMRHead()
+    dtiBrain = SampleDataLogic().downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
 
     mainWindow = slicer.util.mainWindow()
@@ -1137,9 +991,8 @@ class LandmarkRegistrationTest(unittest.TestCase):
     #
     # first, get some data
     #
-    import SampleData
-    sampleDataLogic = SampleData.SampleDataLogic()
-    pre,post = sampleDataLogic.downloadDentalSurgery()
+    from SampleData import SampleDataLogic
+    pre,post = SampleDataLogic().downloadDentalSurgery()
     self.delayDisplay('Two data sets loaded')
 
     mainWindow = slicer.util.mainWindow()
@@ -1221,14 +1074,13 @@ class LandmarkRegistrationTest(unittest.TestCase):
     #
     # first, get some data
     #
-    import SampleData
-    sampleDataLogic = SampleData.SampleDataLogic()
+    from SampleData import SampleDataSource, SampleDataLogic
 
-    dataSource = SampleData.SampleDataSource('fixed', 'http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', 'fixed.nrrd', 'fixed')
-    fixed = sampleDataLogic.downloadFromSource(dataSource)[0]
+    dataSource = SampleDataSource('fixed', 'http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', 'fixed.nrrd', 'fixed')
+    fixed = SampleDataLogic().downloadFromSource(dataSource)[0]
 
-    dataSource = SampleData.SampleDataSource('moving', 'http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', 'moving.nrrd', 'moving')
-    moving = sampleDataLogic.downloadFromSource(dataSource)[0]
+    dataSource = SampleDataSource('moving', 'http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', 'moving.nrrd', 'moving')
+    moving = SampleDataLogic().downloadFromSource(dataSource)[0]
 
     self.delayDisplay('Two data sets loaded')
 
@@ -1268,12 +1120,12 @@ class LandmarkRegistrationTest(unittest.TestCase):
     fixedAxialView = layoutManager.sliceWidget('fixed-Axial').sliceView()
     center = (fixedAxialView.width/2, fixedAxialView.height/2)
     offset = map(lambda element: element+100, center)
-    self.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
+    logic.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
     self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
 
-    self.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
+    logic.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
     self.delayDisplay('dragged to translate', 200)
-    self.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
+    logic.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
     self.delayDisplay('translate back', 200)
 
 
@@ -1309,10 +1161,9 @@ class LandmarkRegistrationTest(unittest.TestCase):
     #
     # first, get some data
     #
-    import SampleData
-    sampleDataLogic = SampleData.SampleDataLogic()
-    mrHead = sampleDataLogic.downloadMRHead()
-    dtiBrain = sampleDataLogic.downloadDTIBrain()
+    from SampleData import SampleDataLogic
+    mrHead = SampleDataLogic().downloadMRHead()
+    dtiBrain = SampleDataLogic().downloadDTIBrain()
     self.delayDisplay('Two data sets loaded')
 
     mainWindow = slicer.util.mainWindow()
@@ -1338,7 +1189,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
     offset = map(lambda element: element+5, center)
     # enter picking mode
     w.landmarksWidget.addLandmark()
-    self.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
+    logic.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
     self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
 
     import time, math
@@ -1352,7 +1203,7 @@ class LandmarkRegistrationTest(unittest.TestCase):
         offset = map(lambda element: element+5, clickPoint)
         # enter picking mode
         w.landmarksWidget.addLandmark()
-        self.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)
+        logic.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)
         pointElapsed = str(time.time() - pointTime)
         self.delayDisplay('Clicked at ' + str(clickPoint) + ' ' + pointElapsed)
         times.append((pointElapsed, clickPoint))
