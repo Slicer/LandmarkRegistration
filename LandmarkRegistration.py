@@ -1076,10 +1076,10 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     #
     from SampleData import SampleDataSource, SampleDataLogic
 
-    dataSource = SampleDataSource('fixed', 'http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', 'fixed.nrrd', 'fixed')
+    dataSource = SampleDataSource(sampleName='fixed', uris='http://slicer.kitware.com/midas3/download/item/157188/small-mr-eye-fixed.nrrd', fileNames='fixed.nrrd', nodeNames='fixed')
     fixed = SampleDataLogic().downloadFromSource(dataSource)[0]
 
-    dataSource = SampleDataSource('moving', 'http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', 'moving.nrrd', 'moving')
+    dataSource = SampleDataSource(sampleName='moving', uris='http://slicer.kitware.com/midas3/download/item/157189/small-mr-eye-moving.nrrd', fileNames='moving.nrrd', nodeNames='moving')
     moving = SampleDataLogic().downloadFromSource(dataSource)[0]
 
     self.delayDisplay('Two data sets loaded')
