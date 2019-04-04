@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import vtk, qt, ctk, slicer
 from . import RegistrationPlugin
 
@@ -93,15 +95,15 @@ class ThinPlatePlugin(RegistrationPlugin):
     rasBounds = [0,]*6
     state.fixed.GetRASBounds(rasBounds)
     from math import floor, ceil
-    origin = map(int,map(floor,rasBounds[::2]))
-    maxes = map(int,map(ceil,rasBounds[1::2]))
+    origin = list(map(int,map(floor,rasBounds[::2])))
+    maxes = list(map(int,map(ceil,rasBounds[1::2])))
     boundSize = [m - o for m,o in zip(maxes,origin) ]
     spacing = state.fixed.GetSpacing()
-    samples = [ceil(b / s) for b,s in zip(boundSize,spacing)]
+    samples = [ceil(int(b / s)) for b,s in zip(boundSize,spacing)]
     extent = [0,]*6
     extent[::2] = [0,]*3
     extent[1::2] = samples
-    extent = map(int,extent)
+    extent = list(map(int,extent))
 
     toGrid = vtk.vtkTransformToGrid()
     toGrid.SetGridOrigin(origin)

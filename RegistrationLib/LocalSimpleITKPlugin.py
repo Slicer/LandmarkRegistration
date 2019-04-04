@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import print_function
+
 import time
 import qt, ctk, slicer
 from . import RegistrationPlugin
@@ -142,10 +145,10 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
       timing = True
 
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
-      print "Cannot refine landmarks. Images or landmarks not selected."
+      print("Cannot refine landmarks. Images or landmarks not selected.")
       return
 
-    print ("Refining landmark " + state.currentLandmarkName) + " using " + self.name
+    print(("Refining landmark " + state.currentLandmarkName) + " using " + self.name)
 
     start = time.time()
     if timing: loadStart = start
@@ -156,7 +159,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     fixedImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(fixedVolume.GetName()) )
     movingImage = sitk.ReadImage(sitkUtils.GetSlicerITKReadWriteAddress(movingVolume.GetName()) )
 
-    if timing: print 'Time for loading was ' + str(time.time() - loadStart) + ' seconds'
+    if timing: print('Time for loading was ' + str(time.time() - loadStart) + ' seconds')
 
     landmarks = state.logic.landmarksForVolumes(volumes)
 
@@ -195,7 +198,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
         import sys
         sys.stderr.write("Fixed landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
         return
-    if self.VerboseMode == "Full Verbose":  print "Fixed ROI: ",fixedMinIndexes.tolist(), fixedROISize.tolist()
+    if self.VerboseMode == "Full Verbose":  print("Fixed ROI: ",fixedMinIndexes.tolist(), fixedROISize.tolist())
     if timing: roiEnd = time.time()
 
     # crop the fixed
@@ -220,7 +223,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
         import sys
         sys.stderr.write("Moving landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
         return
-    if self.VerboseMode == "Full Verbose": print "Moving ROI: ",movingMinIndexes.tolist(), movingROISize.tolist()
+    if self.VerboseMode == "Full Verbose": print("Moving ROI: ",movingMinIndexes.tolist(), movingROISize.tolist())
     if timing: roi2End = time.time()
 
     if timing: crop2Start = time.time()
@@ -228,10 +231,10 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     croppedMovingImage = sitk.Cast(croppedMovingImage, sitk.sitkFloat32)
     if timing: crop2End = time.time()
 
-    if timing: print 'Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds'
-    if timing: print 'Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds'
-    if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
-    if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
+    if timing: print('Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds')
+    if timing: print('Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds')
+    if timing: print('Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds')
+    if timing: print('Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds')
 
     # initialize the registration
     if timing: initTransformStart = time.time()
@@ -239,7 +242,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     tx.SetCenter(fixedPoint)
     tx.SetTranslation(np.array(movingPoint) - np.array(fixedPoint))
     if timing: initTransformEnd = time.time()
-    if timing: print 'Time to initialize transformation was ' + str(initTransformEnd - initTransformStart) + ' seconds'
+    if timing: print('Time to initialize transformation was ' + str(initTransformEnd - initTransformStart) + ' seconds')
 
     # define the registration
     R = sitk.ImageRegistrationMethod()
@@ -280,7 +283,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
 
 
     if timing: regEnd = time.time()
-    if timing: print 'Time for local registration was ' + str(regEnd - regStart) + ' seconds'
+    if timing: print('Time for local registration was ' + str(regEnd - regStart) + ' seconds')
 
     # apply the local transform to the landmark
     #print transform
@@ -293,10 +296,10 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     updatedPoint = [-updatedPoint[0], -updatedPoint[1], updatedPoint[2]]
     movingList.SetNthFiducialPosition(movingIndex, updatedPoint[0], updatedPoint[1], updatedPoint[2])
     if timing: resultEnd = time.time()
-    if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
+    if timing: print('Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds')
 
     end = time.time()
-    print 'Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds'
+    print('Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds')
 
 
 

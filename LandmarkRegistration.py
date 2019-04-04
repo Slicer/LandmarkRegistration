@@ -1,3 +1,5 @@
+from __future__ import division
+from __future__ import print_function
 import os, string
 import time
 import vtk, qt, ctk, slicer
@@ -157,8 +159,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.localRefinementMethodBox = qt.QGroupBox("Local Refinement Method")
     self.localRefinementMethodBox.setLayout(qt.QFormLayout())
     self.localRefinementMethodButtons = {}
-    self.localRefinementMethods = slicer.modules.registrationPlugins.keys()
-    self.localRefinementMethods.sort()
+    self.localRefinementMethods = sorted(slicer.modules.registrationPlugins.keys())
     for localRefinementMethod in self.localRefinementMethods:
       plugin = slicer.modules.registrationPlugins[localRefinementMethod]
       if plugin.type == "Refinement":
@@ -192,8 +193,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.registrationTypeBox = qt.QGroupBox("Registration Type")
     self.registrationTypeBox.setLayout(qt.QFormLayout())
     self.registrationTypeButtons = {}
-    self.registrationTypes = slicer.modules.registrationPlugins.keys()
-    self.registrationTypes.sort()
+    self.registrationTypes = sorted(slicer.modules.registrationPlugins.keys())
     for registrationType in self.registrationTypes:
       plugin = slicer.modules.registrationPlugins[registrationType]
       if plugin.type == "Registration":
@@ -422,7 +422,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
         for compositeNode in compositeNodes:
           if compositeNode.GetLayoutName() == sliceNode.GetLayoutName():
             volumeID = compositeNode.GetBackgroundVolumeID()
-            if self.sliceNodesByVolumeID.has_key(volumeID):
+            if volumeID in self.sliceNodesByVolumeID:
               self.sliceNodesByVolumeID[volumeID].append(sliceNode)
             else:
               self.sliceNodesByVolumeID[volumeID] = [sliceNode,]
@@ -451,7 +451,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
           displayNode.RemoveAllViewNodeIDs()
           volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
           if volumeNodeID:
-            if self.sliceNodesByVolumeID.has_key(volumeNodeID):
+            if volumeNodeID in self.sliceNodesByVolumeID:
               for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
                 displayNode.AddViewNodeID(sliceNode.GetID())
                 for hiddenVolume in self.logic.hiddenFiducialVolumes:
@@ -479,7 +479,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
       if timing: onLandmarkPickedStart = time.time()
       self.onLandmarkPicked(self.landmarksWidget.selectedLandmark)
       if timing: onLandmarkPickedEnd = time.time()
-      if timing: print 'Time to update visualization ' + str(onLandmarkPickedEnd - onLandmarkPickedStart) + ' seconds'
+      if timing: print('Time to update visualization ' + str(onLandmarkPickedEnd - onLandmarkPickedStart) + ' seconds')
 
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
@@ -492,10 +492,10 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.updateSliceNodesByVolumeID()
     volumeNodes = self.currentVolumeNodes()
     landmarksByName = self.logic.landmarksForVolumes(volumeNodes)
-    if landmarksByName.has_key(landmarkName):
+    if landmarkName in landmarksByName:
       for fiducialList,index in landmarksByName[landmarkName]:
         volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
-        if self.sliceNodesByVolumeID.has_key(volumeNodeID):
+        if volumeNodeID in self.sliceNodesByVolumeID:
           point = [0,]*3
           fiducialList.GetNthFiducialPosition(index,point)
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
@@ -715,7 +715,7 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     """
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
     landmarks = self.landmarksForVolumes(volumeNodes)
-    if landmarks.has_key(landmark):
+    if landmark in landmarks:
       for fiducialList,fiducialIndex in landmarks[landmark]:
         fiducialList.RemoveMarkup(fiducialIndex)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
@@ -744,11 +744,11 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
         fiducialSize = listForVolume.GetNumberOfMarkups()
         for fiducialIndex in range(fiducialSize):
           fiducialName = listForVolume.GetNthFiducialLabel(fiducialIndex)
-          if landmarksByName.has_key(fiducialName):
+          if fiducialName in landmarksByName:
             landmarksByName[fiducialName].append((listForVolume,fiducialIndex))
           else:
             landmarksByName[fiducialName] = [(listForVolume,fiducialIndex),]
-    for fiducialName in landmarksByName.keys():
+    for fiducialName in list(landmarksByName.keys()):
       if len(landmarksByName[fiducialName]) != len(volumeNodes):
         landmarksByName.__delitem__(fiducialName)
     return landmarksByName
@@ -903,7 +903,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     if 'Control' in modifiers:
       interator.SetControlKey(1)
     interator.SetEventPosition(*start)
-    for step in xrange(steps):
+    for step in range(steps):
       frac = float(step+1)/steps
       x = int(start[0] + frac*(end[0]-start[0]))
       y = int(start[1] + frac*(end[1]-start[1]))
@@ -1118,8 +1118,8 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     # breakpoints in mouse move callbacks.
     layoutManager = slicer.app.layoutManager()
     fixedAxialView = layoutManager.sliceWidget('fixed-Axial').sliceView()
-    center = (fixedAxialView.width/2, fixedAxialView.height/2)
-    offset = map(lambda element: element+100, center)
+    center = (int(fixedAxialView.width/2), int(fixedAxialView.height/2))
+    offset = [element+100 for element in center]
     logic.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
     self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
 
@@ -1133,7 +1133,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     qt.QCursor().setPos(globalPoint)
     self.delayDisplay('moved to %s' % globalPoint, 200 )
 
-    offset = map(lambda element: element+10, center)
+    offset = [element+10 for element in center]
     globalPoint = fixedAxialView.mapToGlobal(qt.QPoint(*offset))
     if False:
       # move the cursor
@@ -1185,8 +1185,8 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     # breakpoints in mouse move callbacks.
     layoutManager = slicer.app.layoutManager()
     fixedAxialView = layoutManager.sliceWidget('MRHead-Axial').sliceView()
-    center = (fixedAxialView.width/2, fixedAxialView.height/2)
-    offset = map(lambda element: element+5, center)
+    center = (int(fixedAxialView.width/2), int(fixedAxialView.height/2))
+    offset = [element+5 for element in center]
     # enter picking mode
     w.landmarksWidget.addLandmark()
     logic.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
@@ -1199,8 +1199,8 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
       for column in range(5):
         pointTime = time.time()
         flip = int(math.pow(-1, row))
-        clickPoint = (fixedAxialView.width/2+5*row*flip, fixedAxialView.height/2+5*column*flip)
-        offset = map(lambda element: element+5, clickPoint)
+        clickPoint = (int(fixedAxialView.width/2)+5*row*flip, int(fixedAxialView.height/2)+5*column*flip)
+        offset = [element+5 for element in clickPoint]
         # enter picking mode
         w.landmarksWidget.addLandmark()
         logic.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)

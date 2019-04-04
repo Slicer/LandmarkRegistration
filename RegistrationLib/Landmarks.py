@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import qt, slicer, os
 from . import pqWidget
 
@@ -58,8 +60,7 @@ class LandmarksWidget(pqWidget):
     # make a button for each current landmark
     self.labels = {}
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
-    keys = landmarks.keys()
-    keys.sort()
+    keys = sorted(landmarks.keys())
     for landmarkName in keys:
       row = qt.QWidget()
       rowLayout = qt.QHBoxLayout()
@@ -175,7 +176,7 @@ class LandmarksWidget(pqWidget):
 
   def renameLandmark(self):
     landmarks = self.logic.landmarksForVolumes(self.volumeNodes)
-    if landmarks.has_key(self.selectedLandmark):
+    if self.selectedLandmark in landmarks:
       newName = qt.QInputDialog.getText(
           slicer.util.mainWindow(), "Rename Landmark",
           "New name for landmark '%s'?" % self.selectedLandmark)
@@ -196,7 +197,7 @@ class LandmarksWidget(pqWidget):
   def wrappedNodeAddedUpdate(self):
     try:
       self.nodeAddedUpdate()
-    except Exception, e:
+    except Exception as e:
       import traceback
       traceback.print_exc()
       qt.QMessageBox.warning(slicer.util.mainWindow(),

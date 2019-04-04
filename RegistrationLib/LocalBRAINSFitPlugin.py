@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+from __future__ import print_function
+
 import time
 import vtk, qt, ctk, slicer
 from . import RegistrationPlugin
@@ -135,10 +138,10 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
       print("Cannot refine landmarks. CropVolume module is not available.")
 
     if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
-      print "Cannot refine landmarks. Images or landmarks not selected."
+      print("Cannot refine landmarks. Images or landmarks not selected.")
       return
 
-    print ("Refining landmark " + state.currentLandmarkName) + " using " + self.name
+    print(("Refining landmark " + state.currentLandmarkName) + " using " + self.name)
 
     start = time.time()
 
@@ -210,10 +213,10 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     croppedMovingVolume = slicer.mrmlScene.GetNodeByID( cvpn.GetOutputVolumeNodeID() )
     movingVolume.SetAndObserveDisplayNodeID(movingDisplayNode.GetID())
 
-    if timing: print 'Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds'
-    if timing: print 'Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds'
-    if timing: print 'Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds'
-    if timing: print 'Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds'
+    if timing: print('Time to set up fixed ROI was ' + str(roiEnd - roiStart) + ' seconds')
+    if timing: print('Time to set up moving ROI was ' + str(roi2End - roi2Start) + ' seconds')
+    if timing: print('Time to crop fixed volume ' + str(cropEnd - cropStart) + ' seconds')
+    if timing: print('Time to crop moving volume ' + str(crop2End - crop2Start) + ' seconds')
 
     #
     transform = slicer.vtkMRMLLinearTransformNode()
@@ -236,7 +239,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     if timing: regStart = time.time()
     slicer.cli.run(slicer.modules.brainsfit, None, parameters, wait_for_completion=True)
     if timing: regEnd = time.time()
-    if timing: print 'Time for local registration ' + str(regEnd - regStart) + ' seconds'
+    if timing: print('Time for local registration ' + str(regEnd - regStart) + ' seconds')
 
     # apply the local transform to the landmark
     #print transform
@@ -249,7 +252,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
 
     movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
     if timing: resultEnd = time.time()
-    if timing: print 'Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds'
+    if timing: print('Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds')
 
     # clean up cropped volmes, need to reset the foreground/background display before we delete it
     if timing: cleanUpStart = time.time()
@@ -263,10 +266,10 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     transform = None
     matrix = None
     if timing: cleanUpEnd = time.time()
-    if timing: print 'Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds'
+    if timing: print('Cleanup took ' + str(cleanUpEnd - cleanUpStart) + ' seconds')
 
     end = time.time()
-    print 'Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds'
+    print('Refined landmark ' + state.currentLandmarkName + ' in ' + str(end - start) + ' seconds')
 
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
