@@ -107,10 +107,10 @@ class LandmarksWidget(pqWidget):
               fiducialList.PointEndInteractionEvent, lambda caller,event: self.onFiducialEndMoving(caller))
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
-              fiducialList.MarkupAddedEvent, self.requestNodeAddedUpdate)
+              fiducialList.PointPositionDefinedEvent, self.requestNodeAddedUpdate)
       self.observerTags.append( (fiducialList,tag) )
       tag = fiducialList.AddObserver(
-              fiducialList.MarkupRemovedEvent, self.requestNodeAddedUpdate)
+              fiducialList.PointPositionUndefinedEvent, self.requestNodeAddedUpdate)
       self.observerTags.append( (fiducialList,tag) )
 
   def onFiducialMoved(self,fiducialList):
