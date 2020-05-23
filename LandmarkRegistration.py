@@ -54,6 +54,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.sliceNodesByViewName = {}
     self.sliceNodesByVolumeID = {}
     self.observerTags = []
+    self.interactorObserverTags = []
     self.viewNames = ("Fixed", "Moving", "Transformed")
     self.volumeSelectDialog = None
     self.currentRegistrationInterface = None
@@ -220,6 +221,9 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.interfaceFrame.enabled = False
     self.setupDialog()
 
+  def exit(self):
+    self.removeInteractorObservers()
+
   def setupDialog(self):
     """setup dialog"""
 
@@ -319,9 +323,30 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
   def removeObservers(self):
     """Remove observers and any other cleanup needed to
     disconnect from the scene"""
+    self.removeInteractorObservers()
     for obj,tag in self.observerTags:
       obj.RemoveObserver(tag)
     self.observerTags = []
+
+  def addInteractorObservers(self):
+    """Add observers to the Slice interactors
+    """
+    self.removeInteractorObservers()
+    layoutManager = slicer.app.layoutManager()
+    for sliceNodeName in self.sliceNodesByViewName.keys():
+      sliceWidget = layoutManager.sliceWidget(sliceNodeName)
+      sliceLogic = sliceWidget.sliceLogic()
+      sliceView = sliceWidget.sliceView()
+      interactor = sliceView.interactorStyle().GetInteractor()
+      tag = interactor.AddObserver(vtk.vtkCommand.MouseMoveEvent, self.processSliceEvents)
+      self.interactorObserverTags.append( (interactor, tag) )
+
+  def removeInteractorObservers(self):
+    """Remove observers from the Slice interactors
+    """
+    for obj,tag in self.interactorObserverTags:
+      obj.RemoveObserver(tag)
+    self.interactorObserverTags = []
 
   def registrationState(self):
     """Return an instance of RegistrationState populated
@@ -426,6 +451,56 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
               self.sliceNodesByVolumeID[volumeID].append(sliceNode)
             else:
               self.sliceNodesByVolumeID[volumeID] = [sliceNode,]
+
+    self.addInteractorObservers()
+
+  def processSliceEvents(self, caller=None, event=None):
+    if caller is None:
+      return
+
+    applicationLogic = slicer.app.applicationLogic()
+    layoutManager = slicer.app.layoutManager()
+    compositeNode = None
+    for sliceNodeName in self.sliceNodesByViewName.keys():
+      sliceWidget = layoutManager.sliceWidget(sliceNodeName)
+      sliceLogic = sliceWidget.sliceLogic()
+      sliceView = sliceWidget.sliceView()
+      interactor = sliceView.interactorStyle().GetInteractor()
+      if not interactor is caller:
+        continue
+
+      compositeNode = sliceLogic.GetSliceCompositeNode()
+      break
+
+    if compositeNode is None:
+      return
+
+    volumeID = compositeNode.GetBackgroundVolumeID()
+    if volumeID is None:
+      return
+
+    volumeNode = slicer.util.getNode(volumeID)
+    if volumeNode is None:
+      return
+
+    fiducialList = self.logic.volumeFiducialList(volumeNode)
+    if not fiducialList:
+      return
+
+    fiducialsInLandmarks = False
+    volumeNodes = self.currentVolumeNodes()
+    landmarks = self.logic.landmarksForVolumes(volumeNodes)
+    for landmarkName in landmarks:
+      if fiducialsInLandmarks:
+        break
+      for tempList,index in landmarks[landmarkName]:
+        if tempList == fiducialList:
+          fiducialsInLandmarks = True
+          break
+
+    if fiducialsInLandmarks:
+      markupsLogic = slicer.modules.markups.logic()
+      markupsLogic.SetActiveListID(fiducialList)
 
   def restrictLandmarksToViews(self):
     """Set fiducials so they only show up in the view
@@ -623,8 +698,8 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     displayNode = fiducialList.GetDisplayNode()
     # TODO: pick appropriate defaults
     # 135,135,84
-    displayNode.SetTextScale(6.)
-    displayNode.SetGlyphScale(6.)
+    displayNode.SetTextScale(3.)
+    displayNode.SetGlyphScale(3.)
     displayNode.SetGlyphTypeFromString('StarBurst2D')
     displayNode.SetColor((1,1,0.4))
     displayNode.SetSelectedColor((1,1,0))
@@ -648,6 +723,7 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     if not fiducialList:
       fiducialListNodeID = markupsLogic.AddNewFiducialNode(listName,slicer.mrmlScene)
       fiducialList = slicer.mrmlScene.GetNodeByID(fiducialListNodeID)
+      fiducialList.SetMarkupLabelFormat("L-%d")
       if associatedNode:
         fiducialList.SetAttribute("AssociatedNodeID", associatedNode.GetID())
       self.setFiducialListDisplay(fiducialList)
@@ -801,6 +877,10 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
         # associated with one of our volumes
         fiducialSize = fiducialList.GetNumberOfMarkups()
         for fiducialIndex in range(fiducialSize):
+          status = fiducialList.GetNthControlPointPositionStatus(fiducialIndex)
+          if status != fiducialList.PositionDefined:
+            continue
+
           associatedID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
           if associatedID in volumeNodeIDs:
             # found one, so add it as a landmark
@@ -846,6 +926,10 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
         continue
       fiducialSize = fiducialList.GetNumberOfMarkups()
       for fiducialIndex in range(fiducialSize):
+        status = fiducialList.GetNthControlPointPositionStatus(fiducialIndex)
+        if status != fiducialList.PositionDefined:
+          continue
+
         fiducialAssociatedVolumeID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
         landmarkName = fiducialList.GetNthFiducialLabel(fiducialIndex)
         landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)

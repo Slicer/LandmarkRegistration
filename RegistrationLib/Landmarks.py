@@ -121,9 +121,10 @@ class LandmarksWidget(pqWidget):
     movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
     if self.movingView and movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
-      landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
-      self.pickLandmark(landmarkName,clearMovingView=False)
-      self.emit("landmarkMoved(landmarkName)", (landmarkName,))
+      if movingIndex < fiducialList.GetNumberOfControlPoints():
+        landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+        self.pickLandmark(landmarkName,clearMovingView=False)
+        self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
   def onFiducialEndMoving(self,fiducialList):
     """Callback when fiducialList's point is done moving."""
