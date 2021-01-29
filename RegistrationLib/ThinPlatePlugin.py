@@ -84,7 +84,6 @@ class ThinPlatePlugin(RegistrationPlugin):
 
   def onExportGrid(self):
     """Converts the current thin plate transform to a grid"""
-    self.hotUpdateButton = None
     state = self.registrationState()
 
     # since the transform is ras-to-ras, we find the extreme points
@@ -99,6 +98,7 @@ class ThinPlatePlugin(RegistrationPlugin):
     maxes = list(map(int,map(ceil,rasBounds[1::2])))
     boundSize = [m - o for m,o in zip(maxes,origin) ]
     spacing = state.fixed.GetSpacing()
+    spacing = [max(spacing)*5]*3
     samples = [ceil(int(b / s)) for b,s in zip(boundSize,spacing)]
     extent = [0,]*6
     extent[::2] = [0,]*3
@@ -107,7 +107,7 @@ class ThinPlatePlugin(RegistrationPlugin):
 
     toGrid = vtk.vtkTransformToGrid()
     toGrid.SetGridOrigin(origin)
-    toGrid.SetGridSpacing(state.fixed.GetSpacing())
+    toGrid.SetGridSpacing(spacing)
     toGrid.SetGridExtent(extent)
     toGrid.SetInput(state.transform.GetTransformFromParent()) # same in VTKv 5 & 6
     toGrid.Update()
