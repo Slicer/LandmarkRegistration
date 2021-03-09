@@ -121,7 +121,7 @@ class LandmarksWidget(pqWidget):
     movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
     if self.movingView and movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
-      if movingIndex < fiducialList.GetNumberOfControlPoints():
+      if movingIndex < fiducialList.GetNumberOfDefinedControlPoints():
         landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
         self.pickLandmark(landmarkName,clearMovingView=False)
         self.emit("landmarkMoved(landmarkName)", (landmarkName,))

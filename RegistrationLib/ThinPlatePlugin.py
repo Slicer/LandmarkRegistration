@@ -109,14 +109,11 @@ class ThinPlatePlugin(RegistrationPlugin):
     toGrid.SetGridOrigin(origin)
     toGrid.SetGridSpacing(spacing)
     toGrid.SetGridExtent(extent)
-    toGrid.SetInput(state.transform.GetTransformFromParent()) # same in VTKv 5 & 6
+    toGrid.SetInput(state.transform.GetTransformFromParent())
     toGrid.Update()
 
     gridTransform = slicer.vtkOrientedGridTransform()
-    if vtk.VTK_MAJOR_VERSION < 6:
-      gridTransform.SetDisplacementGrid(toGrid.GetOutput()) # different in VTKv 5 & 6
-    else:
-      gridTransform.SetDisplacementGridData(toGrid.GetOutput())
+    gridTransform.SetDisplacementGridData(toGrid.GetOutput())
     gridNode = slicer.vtkMRMLGridTransformNode()
     gridNode.SetAndObserveTransformFromParent(gridTransform)
     gridNode.SetName(state.transform.GetName()+"-grid")
