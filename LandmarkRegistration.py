@@ -1188,8 +1188,6 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     w.cam = w.ren.GetActiveCamera()
     print(w.favpm)
 
-    logic = LandmarkRegistrationLogic()
-
     # initiate registration
     w.registrationTypeButtons["ThinPlate"].checked = True
     w.registrationTypeButtons["ThinPlate"].clicked()
@@ -1204,12 +1202,12 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     fixedAxialView = layoutManager.sliceWidget('fixed-Axial').sliceView()
     center = (int(fixedAxialView.width/2), int(fixedAxialView.height/2))
     offset = [element+100 for element in center]
-    logic.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
+    slicer.util.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
     self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
 
-    logic.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
+    slicer.util.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
     self.delayDisplay('dragged to translate', 200)
-    logic.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
+    slicer.util.clickAndDrag(fixedAxialView,button='Middle', start=offset,end=center,steps=10)
     self.delayDisplay('translate back', 200)
 
 
@@ -1261,9 +1259,6 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
 
     self.delayDisplay('Volumes set up',100)
 
-    logic = LandmarkRegistrationLogic()
-
-
     # move the mouse to the middle of the widget so that the first
     # mouse move event will be exactly over the fiducial to simplify
     # breakpoints in mouse move callbacks.
@@ -1273,7 +1268,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     offset = [element+5 for element in center]
     # enter picking mode
     w.landmarksWidget.addLandmark()
-    logic.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
+    slicer.util.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
     self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
 
     import time, math
@@ -1287,7 +1282,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
         offset = [element+5 for element in clickPoint]
         # enter picking mode
         w.landmarksWidget.addLandmark()
-        logic.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)
+        slicer.util.clickAndDrag(fixedAxialView,start=clickPoint,end=offset, steps=10)
         pointElapsed = str(time.time() - pointTime)
         self.delayDisplay('Clicked at ' + str(clickPoint) + ' ' + pointElapsed)
         times.append((pointElapsed, clickPoint))
