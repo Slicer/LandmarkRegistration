@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import vtk, qt, ctk, slicer
 from . import RegistrationPlugin
 
@@ -50,13 +48,13 @@ class ThinPlatePlugin(RegistrationPlugin):
   sourceFile = __file__
 
   def __init__(self,parent=None):
-    super(ThinPlatePlugin,self).__init__(parent)
+    super().__init__(parent)
 
     self.thinPlateTransform = None
 
   def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(ThinPlatePlugin,self).create(registrationState)
+    super().create(registrationState)
     #
     # Thin Plate Spline Registration Pane
     #
@@ -80,7 +78,7 @@ class ThinPlatePlugin(RegistrationPlugin):
 
   def destroy(self):
     """Clean up"""
-    super(ThinPlatePlugin,self).destroy()
+    super().destroy()
 
   def onExportGrid(self):
     """Converts the current thin plate transform to a grid"""

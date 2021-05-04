@@ -1,5 +1,3 @@
-from __future__ import division
-from __future__ import print_function
 import os, string
 import time
 import vtk, qt, ctk, slicer
@@ -627,7 +625,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     if not sys.path.__contains__(p):
       sys.path.insert(0,p)
     for subModuleName in ("pqWidget", "Visualization", "Landmarks", ):
-      fp = open(filePath, "r")
+      fp = open(filePath)
       globals()[subModuleName] = imp.load_module(
           subModuleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
       fp.close()
@@ -957,7 +955,7 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
       fiducialCount = fiducialNodes[0].GetNumberOfFiducials()
       for fiducialNode in fiducialNodes:
         if fiducialCount != fiducialNode.GetNumberOfFiducials():
-          raise Exception("Fiducial counts don't match {0}".format(fiducialCount))
+          raise Exception(f"Fiducial counts don't match {fiducialCount}")
       point = [0,]*3
       indices = range(fiducialCount)
       for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
@@ -1203,7 +1201,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     center = (int(fixedAxialView.width/2), int(fixedAxialView.height/2))
     offset = [element+100 for element in center]
     slicer.util.clickAndDrag(fixedAxialView,start=center,end=center, steps=0)
-    self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
+    self.delayDisplay(f'Added a landmark, translate to drag at {center} to {offset}', 200)
 
     slicer.util.clickAndDrag(fixedAxialView,button='Middle', start=center,end=offset,steps=10)
     self.delayDisplay('dragged to translate', 200)
@@ -1269,7 +1267,7 @@ class LandmarkRegistrationTest(ScriptedLoadableModuleTest):
     # enter picking mode
     w.landmarksWidget.addLandmark()
     slicer.util.clickAndDrag(fixedAxialView,start=center,end=offset, steps=10)
-    self.delayDisplay('Added a landmark, translate to drag at %s to %s' % (center,offset), 200)
+    self.delayDisplay(f'Added a landmark, translate to drag at {center} to {offset}', 200)
 
     import time, math
     times = []

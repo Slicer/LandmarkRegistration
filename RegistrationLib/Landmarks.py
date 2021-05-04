@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import qt, slicer, os
 from . import pqWidget
 
@@ -10,7 +8,7 @@ class LandmarksWidget(pqWidget):
   """
 
   def __init__(self,logic):
-    super(LandmarksWidget,self).__init__()
+    super().__init__()
     self.logic = logic
     self.volumeNodes = []
     self.selectedLandmark = None # a landmark name

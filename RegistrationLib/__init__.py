@@ -14,4 +14,4 @@ for plugin in [
     __import__('RegistrationLib.%sPlugin' % plugin)
   except ImportError as details:
     import logging
-    logging.warning("Registration: Failed to import '%s' plugin: %s" % (plugin, details))
+    logging.warning(f"Registration: Failed to import '{plugin}' plugin: {details}")

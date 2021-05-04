@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-
 import time
 import qt, ctk, slicer
 from . import RegistrationPlugin
@@ -60,11 +57,11 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
   sitkUtils = None
 
   def __init__(self,parent=None):
-    super(LocalSimpleITKPlugin,self).__init__(parent)
+    super().__init__(parent)
 
   def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(LocalSimpleITKPlugin,self).create(registrationState)
+    super().create(registrationState)
 
     # To avoid the overhead of importing SimpleITK during application
     # startup, the import of SimpleITK is delayed until it is needed.
@@ -124,7 +121,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
 
   def destroy(self):
     """Clean up"""
-    super(LocalSimpleITKPlugin,self).destroy()
+    super().destroy()
 
   def onLocalSimpleITKMode(self,mode):
     self.LocalSimpleITKMode = mode
@@ -196,7 +193,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     # minimal acceptable ROI size required by registration framework.
     if not all(fixedROISize > minimalROISize):
         import sys
-        sys.stderr.write("Fixed landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
+        sys.stderr.write(f"Fixed landmark {state.currentLandmarkName} is too close to the image border, cannot register!\n")
         return
     if self.VerboseMode == "Full Verbose":  print("Fixed ROI: ",fixedMinIndexes.tolist(), fixedROISize.tolist())
     if timing: roiEnd = time.time()
@@ -221,7 +218,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     # minimal acceptable ROI size required by registration framework.
     if not all(movingROISize > minimalROISize):
         import sys
-        sys.stderr.write("Moving landmark {0} is too close to the image border, cannot register!\n".format(state.currentLandmarkName))
+        sys.stderr.write(f"Moving landmark {state.currentLandmarkName} is too close to the image border, cannot register!\n")
         return
     if self.VerboseMode == "Full Verbose": print("Moving ROI: ",movingMinIndexes.tolist(), movingROISize.tolist())
     if timing: roi2End = time.time()
@@ -262,9 +259,9 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
 
     # setup an observer
     def command_iteration(method) :
-      print("{0:3} = {1:10.5f} : {2}".format(method.GetOptimizerIteration(),
-                                             method.GetMetricValue(),
-                                             method.GetOptimizerPosition()))
+      print("{:3} = {:10.5f} : {}".format(method.GetOptimizerIteration(),
+                                          method.GetMetricValue(),
+                                          method.GetOptimizerPosition()))
     if self.VerboseMode == "Full Verbose":
       R.AddCommand( sitk.sitkIterationEvent, lambda: command_iteration(R) )
 
@@ -277,9 +274,9 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     if self.VerboseMode == "Full Verbose":
       print("-------")
       print(outTx)
-      print("Optimizer stop condition: {0}".format(R.GetOptimizerStopConditionDescription()))
-      print(" Iteration: {0}".format(R.GetOptimizerIteration()))
-      print(" Metric value: {0}".format(R.GetMetricValue()))
+      print(f"Optimizer stop condition: {R.GetOptimizerStopConditionDescription()}")
+      print(f" Iteration: {R.GetOptimizerIteration()}")
+      print(f" Metric value: {R.GetMetricValue()}")
 
 
     if timing: regEnd = time.time()

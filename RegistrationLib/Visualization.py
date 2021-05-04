@@ -8,7 +8,7 @@ class VisualizationWidget(pqWidget):
   """
 
   def __init__(self,logic):
-    super(VisualizationWidget,self).__init__()
+    super().__init__()
     self.rockCount = 0
     self.rocking = False
     self.rockTimer = None

@@ -1,5 +1,4 @@
-
-class pqWidget(object):
+class pqWidget:
   """
   A "QWidget"-like widget class that manages provides some
   helper functionality (signals, slots...)
