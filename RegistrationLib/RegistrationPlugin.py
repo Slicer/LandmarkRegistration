@@ -22,7 +22,7 @@ comment = """
 # RegistrationPlugin
 #
 
-class RegistrationPlugin(object):
+class RegistrationPlugin:
   """ Base class for Registration plugins
   """
 

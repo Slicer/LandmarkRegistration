@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-
 import time
 import vtk, qt, ctk, slicer
 from . import RegistrationPlugin
@@ -55,11 +52,11 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
   sourceFile = __file__
 
   def __init__(self,parent=None):
-    super(LocalBRAINSFitPlugin,self).__init__(parent)
+    super().__init__(parent)
 
   def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(LocalBRAINSFitPlugin,self).create(registrationState)
+    super().create(registrationState)
 
 
     self.LocalBRAINSFitMode = "Small"
@@ -113,7 +110,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
 
   def destroy(self):
     """Clean up"""
-    super(LocalBRAINSFitPlugin,self).destroy()
+    super().destroy()
 
 
   def onLocalBRAINSFitMode(self,mode):

@@ -48,11 +48,11 @@ class AffinePlugin(RegistrationPlugin):
   sourceFile = __file__
 
   def __init__(self,parent=None):
-    super(AffinePlugin,self).__init__(parent)
+    super().__init__(parent)
 
   def create(self,registrationState):
     """Make the plugin-specific user interface"""
-    super(AffinePlugin,self).create(registrationState)
+    super().create(registrationState)
 
     self.linearMode = "Rigid"
 
@@ -85,7 +85,7 @@ class AffinePlugin(RegistrationPlugin):
 
   def destroy(self):
     """Clean up"""
-    super(AffinePlugin,self).destroy()
+    super().destroy()
 
   def onLandmarkMoved(self,state):
     """Perform the linear transform using the vtkLandmarkTransform class"""

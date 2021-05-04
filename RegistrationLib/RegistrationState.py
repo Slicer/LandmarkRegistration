@@ -1,9 +1,8 @@
-
 #
 # RegistrationState
 #
 
-class RegistrationState(object):
+class RegistrationState:
   """ Holds parameters of registration.
   An instance of this class is passed to virtual methods
   """
