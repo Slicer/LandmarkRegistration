@@ -151,8 +151,6 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     cvpn = slicer.vtkMRMLCropVolumeParametersNode()
     cvpn.SetInterpolationMode(1)
     cvpn.SetVoxelBased(1)
-    fixedPoint = [0,]*3
-    movingPoint = [0,]*3
 
     (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
 
@@ -164,7 +162,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     roiFixed = slicer.vtkMRMLAnnotationROINode()
     slicer.mrmlScene.AddNode(roiFixed)
 
-    fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
+    fixedPoint = fixedList.GetNthControlPointPosition(fixedIndex)
     roiFixed.SetDisplayVisibility(0)
     roiFixed.SelectableOff()
     roiFixed.SetXYZ(fixedPoint)
@@ -188,7 +186,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     roiMoving = slicer.vtkMRMLAnnotationROINode()
     slicer.mrmlScene.AddNode(roiMoving)
 
-    movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+    movingPoint = movingList.GetNthControlPointPosition(movingIndex)
     roiMoving.SetDisplayVisibility(0)
     roiMoving.SelectableOff()
     roiMoving.SetXYZ(movingPoint)
@@ -247,7 +245,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     tp = matrix.MultiplyPoint(fixedPoint + [1,])
     #print fixedPoint, movingPoint, tp[:3]
 
-    movingList.SetNthFiducialPosition(movingIndex, tp[0], tp[1], tp[2])
+    movingList.SetNthControlPointPosition(movingIndex, tp[0], tp[1], tp[2])
     if timing: resultEnd = time.time()
     if timing: print('Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds')
 

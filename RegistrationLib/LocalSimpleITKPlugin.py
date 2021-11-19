@@ -165,11 +165,8 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
     (fixedList,fixedIndex) = fixedFiducial
     (movingList, movingIndex) = movingFiducial
 
-    fixedPoint = [0,]*3
-    movingPoint = [0,]*3
-
-    fixedList.GetNthFiducialPosition(fixedIndex,fixedPoint)
-    movingList.GetNthFiducialPosition(movingIndex,movingPoint)
+    fixedPoint = fixedList.GetNthControlPointPosition(fixedIndex)
+    movingPoint = movingList.GetNthControlPointPosition(movingIndex)
 
     # HACK transform from RAS to LPS
     fixedPoint = [-fixedPoint[0], -fixedPoint[1], fixedPoint[2]]
@@ -291,7 +288,7 @@ class LocalSimpleITKPlugin(RegistrationPlugin):
 
     # HACK transform from LPS to RAS
     updatedPoint = [-updatedPoint[0], -updatedPoint[1], updatedPoint[2]]
-    movingList.SetNthFiducialPosition(movingIndex, updatedPoint[0], updatedPoint[1], updatedPoint[2])
+    movingList.SetNthControlPointPosition(movingIndex, updatedPoint[0], updatedPoint[1], updatedPoint[2])
     if timing: resultEnd = time.time()
     if timing: print('Time for transforming landmark was ' + str(resultEnd - resultStart) + ' seconds')
 

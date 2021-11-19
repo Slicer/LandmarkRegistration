@@ -120,7 +120,7 @@ class LandmarksWidget(pqWidget):
     if self.movingView and movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
       if movingIndex < fiducialList.GetNumberOfDefinedControlPoints():
-        landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+        landmarkName = fiducialList.GetNthControlPointLabel(movingIndex)
         self.pickLandmark(landmarkName,clearMovingView=False)
         self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
@@ -129,7 +129,7 @@ class LandmarksWidget(pqWidget):
     movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
     if movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
-      landmarkName = fiducialList.GetNthMarkupLabel(movingIndex)
+      landmarkName = fiducialList.GetNthControlPointLabel(movingIndex)
       self.pickLandmark(landmarkName,clearMovingView=False)
       self.emit("landmarkEndMoving(landmarkName)", (landmarkName,))
 
@@ -181,7 +181,7 @@ class LandmarksWidget(pqWidget):
           "New name for landmark '%s'?" % self.selectedLandmark)
       if newName != "":
         for fiducialList,index in landmarks[self.selectedLandmark]:
-          fiducialList.SetNthFiducialLabel(newName)
+          fiducialList.SetNthControlPointLabel(newName)
         self.selectedLandmark = newName
         self.updateLandmarkArray()
         self.pickLandmark(newName)

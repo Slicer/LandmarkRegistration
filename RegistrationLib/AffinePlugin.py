@@ -30,7 +30,7 @@ class AffinePlugin(RegistrationPlugin):
   #
   # generic settings that can (should) be overridden by the subclass
   #
-  
+
   # displayed for the user to select the registration
   name = "Affine Registration"
   tooltip = "Uses landmarks to define linear transform matrices"
@@ -104,7 +104,7 @@ class AffinePlugin(RegistrationPlugin):
       landmarkTransform.SetModeToSimilarity()
     if self.linearMode == 'Affine':
       landmarkTransform.SetModeToAffine()
-    if state.fixedFiducials.GetNumberOfFiducials() < 3:
+    if state.fixedFiducials.GetNumberOfControlPoints() < 3:
       landmarkTransform.SetModeToRigidBody()
 
     volumeNodes = (state.fixed, state.moving)

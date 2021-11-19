@@ -569,8 +569,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
       for fiducialList,index in landmarksByName[landmarkName]:
         volumeNodeID = fiducialList.GetAttribute("AssociatedNodeID")
         if volumeNodeID in self.sliceNodesByVolumeID:
-          point = [0,]*3
-          fiducialList.GetNthFiducialPosition(index,point)
+          point = fiducialList.GetNthControlPointPosition(index)
           for sliceNode in self.sliceNodesByVolumeID[volumeNodeID]:
             if sliceNode.GetLayoutName() != self.landmarksWidget.movingView:
               sliceNode.JumpSliceByCentering(*point)
@@ -730,10 +729,10 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     markupsLogic.SetActiveListID(fiducialList)
 
     foundLandmarkFiducial = False
-    fiducialSize = fiducialList.GetNumberOfFiducials()
+    fiducialSize = fiducialList.GetNumberOfControlPoints()
     for fiducialIndex in range(fiducialSize):
-      if fiducialList.GetNthFiducialLabel(fiducialIndex) == name:
-        fiducialList.SetNthFiducialPosition(fiducialIndex, *position)
+      if fiducialList.GetNthControlPointLabel(fiducialIndex) == name:
+        fiducialList.SetNthControlPointPosition(fiducialIndex, *position)
         foundLandmarkFiducial = True
         break
 
@@ -747,12 +746,12 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
             position[i] = rasBounds[2*i]
           if position[i] > rasBounds[2*i+1]:
             position[i] = rasBounds[2*i+1]
-      fiducialList.AddFiducial(*position)
-      fiducialIndex = fiducialList.GetNumberOfFiducials()-1
+      fiducialList.AddControlPoint(position, "")
+      fiducialIndex = fiducialList.GetNumberOfControlPoints()-1
 
-    fiducialList.SetNthFiducialLabel(fiducialIndex, name)
-    fiducialList.SetNthFiducialSelected(fiducialIndex, False)
-    fiducialList.SetNthMarkupLocked(fiducialIndex, False)
+    fiducialList.SetNthControlPointLabel(fiducialIndex, name)
+    fiducialList.SetNthControlPointSelected(fiducialIndex, False)
+    fiducialList.SetNthControlPointLocked(fiducialIndex, False)
 
     originalActiveList = slicer.mrmlScene.GetNodeByID(originalActiveListID)
     if originalActiveList:
@@ -791,7 +790,7 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     landmarks = self.landmarksForVolumes(volumeNodes)
     if landmark in landmarks:
       for fiducialList,fiducialIndex in landmarks[landmark]:
-        fiducialList.RemoveMarkup(fiducialIndex)
+        fiducialList.RemoveNthControlPoint(fiducialIndex)
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 
   def volumeFiducialList(self,volumeNode):
@@ -815,9 +814,9 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     for volumeNode in volumeNodes:
       listForVolume = self.volumeFiducialList(volumeNode)
       if listForVolume:
-        fiducialSize = listForVolume.GetNumberOfMarkups()
+        fiducialSize = listForVolume.GetNumberOfControlPoints()
         for fiducialIndex in range(fiducialSize):
-          fiducialName = listForVolume.GetNthFiducialLabel(fiducialIndex)
+          fiducialName = listForVolume.GetNthControlPointLabel(fiducialIndex)
           if fiducialName in landmarksByName:
             landmarksByName[fiducialName].append((listForVolume,fiducialIndex))
           else:
@@ -837,17 +836,17 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     fiducialList = self.volumeFiducialList(volumeNode)
     if not fiducialList:
       return None
-    fiducialSize = fiducialList.GetNumberOfMarkups()
+    fiducialSize = fiducialList.GetNumberOfControlPoints()
     for fiducialIndex in range(fiducialSize):
-      if fiducialList.GetNthFiducialLabel(fiducialIndex) == landmarkName:
-        fiducialList.SetNthMarkupAssociatedNodeID(fiducialIndex, volumeNode.GetID())
+      if fiducialList.GetNthControlPointLabel(fiducialIndex) == landmarkName:
+        fiducialList.SetNthControlPointAssociatedNodeID(fiducialIndex, volumeNode.GetID())
         return None
     # if we got here, then there is no fiducial with this name so add one
-    fiducialList.AddFiducial(*landmarkPosition)
-    fiducialIndex = fiducialList.GetNumberOfFiducials()-1
-    fiducialList.SetNthFiducialLabel(fiducialIndex, landmarkName)
-    fiducialList.SetNthFiducialSelected(fiducialIndex, False)
-    fiducialList.SetNthMarkupLocked(fiducialIndex, False)
+    fiducialList.AddControlPoint(landmarkPosition, "")
+    fiducialIndex = fiducialList.GetNumberOfControlPoints()-1
+    fiducialList.SetNthControlPointLabel(fiducialIndex, landmarkName)
+    fiducialList.SetNthControlPointSelected(fiducialIndex, False)
+    fiducialList.SetNthControlPointLocked(fiducialIndex, False)
     return landmarkName
 
   def collectAssociatedFiducials(self,volumeNodes):
@@ -873,16 +872,16 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
       if fiducialList not in landmarkFiducialLists:
         # this is not one of our fiducial lists, so look for fiducials
         # associated with one of our volumes
-        fiducialSize = fiducialList.GetNumberOfMarkups()
+        fiducialSize = fiducialList.GetNumberOfControlPoints()
         for fiducialIndex in range(fiducialSize):
           status = fiducialList.GetNthControlPointPositionStatus(fiducialIndex)
           if status != fiducialList.PositionDefined:
             continue
 
-          associatedID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
+          associatedID = fiducialList.GetNthControlPointAssociatedNodeID(fiducialIndex)
           if associatedID in volumeNodeIDs:
             # found one, so add it as a landmark
-            landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
+            landmarkPosition = fiducialList.GetNthControlPointPositionVector(fiducialIndex)
             volumeNode = slicer.mrmlScene.GetNodeByID(associatedID)
             # if new fiducial is associated with moving volume,
             # then map the position back to where it would have been
@@ -904,7 +903,7 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
             addedLandmark = self.addLandmark(volumeNodes,landmarkPosition,movingPosition)
             listIndexToRemove.insert(0,(fiducialList,fiducialIndex))
     for fiducialList,fiducialIndex in listIndexToRemove:
-      fiducialList.RemoveMarkup(fiducialIndex)
+      fiducialList.RemoveNthControlPoint(fiducialIndex)
     return addedLandmark
 
   def landmarksFromFiducials(self,volumeNodes):
@@ -922,18 +921,18 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
       if not fiducialList:
         print("no fiducialList for volume %s" % volumeNode.GetName())
         continue
-      fiducialSize = fiducialList.GetNumberOfMarkups()
+      fiducialSize = fiducialList.GetNumberOfControlPoints()
       for fiducialIndex in range(fiducialSize):
         status = fiducialList.GetNthControlPointPositionStatus(fiducialIndex)
         if status != fiducialList.PositionDefined:
           continue
 
-        fiducialAssociatedVolumeID = fiducialList.GetNthMarkupAssociatedNodeID(fiducialIndex)
-        landmarkName = fiducialList.GetNthFiducialLabel(fiducialIndex)
-        landmarkPosition = fiducialList.GetMarkupPointVector(fiducialIndex,0)
+        fiducialAssociatedVolumeID = fiducialList.GetNthControlPointAssociatedNodeID(fiducialIndex)
+        landmarkName = fiducialList.GetNthControlPointLabel(fiducialIndex)
+        landmarkPosition = fiducialList.GetNthControlPointPosition(fiducialIndex)
         if fiducialAssociatedVolumeID != volumeNode.GetID():
           # fiducial was placed on a viewer associated with the non-active list, so change it
-          fiducialList.SetNthMarkupAssociatedNodeID(fiducialIndex,volumeNode.GetID())
+          fiducialList.SetNthControlPointAssociatedNodeID(fiducialIndex,volumeNode.GetID())
         # now make sure all other lists have a corresponding fiducial (same name)
         for otherVolumeNode in volumeNodes:
           if otherVolumeNode != volumeNode:
@@ -952,15 +951,14 @@ class LandmarkRegistrationLogic(ScriptedLoadableModuleLogic):
     sameNumberOfNodes = len(volumeNodes) == len(fiducialNodes)
     noNoneNodes = None not in volumeNodes and None not in fiducialNodes
     if sameNumberOfNodes and noNoneNodes:
-      fiducialCount = fiducialNodes[0].GetNumberOfFiducials()
+      fiducialCount = fiducialNodes[0].GetNumberOfControlPoints()
       for fiducialNode in fiducialNodes:
-        if fiducialCount != fiducialNode.GetNumberOfFiducials():
+        if fiducialCount != fiducialNode.GetNumberOfControlPoints():
           raise Exception(f"Fiducial counts don't match {fiducialCount}")
-      point = [0,]*3
       indices = range(fiducialCount)
       for fiducials,volumeNode in zip(fiducialNodes,volumeNodes):
         for index in indices:
-          fiducials.GetNthFiducialPosition(index,point)
+          point = fiducials.GetNthControlPointPosition(index)
           points[volumeNode].InsertNextPoint(point)
     return points
 
