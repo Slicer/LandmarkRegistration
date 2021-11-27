@@ -122,9 +122,9 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
   def refineLandmark(self, state):
     """Refine the specified landmark"""
     # Refine landmark, or if none, do nothing
-    #     Crop images around the fiducial
+    #     Crop images around the point
     #     Affine registration of the cropped images
-    #     Transform the fiducial using the transformation
+    #     Transform the point using the transformation
     #
     # No need to take into account the current transformation because landmarks are in World RAS
     timing = False
@@ -134,7 +134,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     if state.logic.cropLogic is None:
       print("Cannot refine landmarks. CropVolume module is not available.")
 
-    if state.fixed == None or state.moving == None or state.fixedFiducials == None or  state.movingFiducials == None or state.currentLandmarkName == None:
+    if state.fixed == None or state.moving == None or state.fixedPoints == None or  state.movingPoints == None or state.currentLandmarkName == None:
       print("Cannot refine landmarks. Images or landmarks not selected.")
       return
 
@@ -152,10 +152,10 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     cvpn.SetInterpolationMode(1)
     cvpn.SetVoxelBased(1)
 
-    (fixedFiducial, movingFiducial) = landmarks[state.currentLandmarkName]
+    (fixedPoint, movingPoint) = landmarks[state.currentLandmarkName]
 
-    (fixedList,fixedIndex) = fixedFiducial
-    (movingList, movingIndex) = movingFiducial
+    (fixedList,fixedIndex) = fixedPoint
+    (movingList, movingIndex) = movingPoint
 
     # define an roi for the fixed
     if timing: roiStart = time.time()

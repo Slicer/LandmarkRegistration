@@ -4,7 +4,7 @@ from . import pqWidget
 class LandmarksWidget(pqWidget):
   """
   A "QWidget"-like class that manages a set of landmarks
-  that are pairs of fiducials
+  that are pairs of points
   """
 
   def __init__(self,logic):
@@ -15,9 +15,9 @@ class LandmarksWidget(pqWidget):
     self.landmarkGroupBox = None # a QGroupBox
     self.labels = {} # the current buttons in the group box
     self.pendingUpdate = False # update on new scene nodes
-    self.updatingFiducials = False # don't update while update in process
-    self.observerTags = [] # for monitoring fiducial changes
-    self.movingView = None # layoutName of slice node where fiducial is being moved
+    self.updatingPoints = False # don't update while update in process
+    self.observerTags = [] # for monitoring point changes
+    self.movingView = None # layoutName of slice node where point is being moved
 
     self.widget = qt.QWidget()
     self.layout = qt.QFormLayout(self.widget)
@@ -93,43 +93,43 @@ class LandmarksWidget(pqWidget):
     self.addLandmarkObservers()
 
   def addLandmarkObservers(self):
-    """Add observers to all fiducialLists in scene
+    """Add observers to all pointLists in scene
     so we will know when new markups are added
     """
     self.removeLandmarkObservers()
-    for fiducialList in slicer.util.getNodes('vtkMRMLMarkupsFiducialNode*').values():
-      tag = fiducialList.AddObserver(
-              fiducialList.PointModifiedEvent, lambda caller,event: self.onFiducialMoved(caller))
-      self.observerTags.append( (fiducialList,tag) )
-      tag = fiducialList.AddObserver(
-              fiducialList.PointEndInteractionEvent, lambda caller,event: self.onFiducialEndMoving(caller))
-      self.observerTags.append( (fiducialList,tag) )
-      tag = fiducialList.AddObserver(
-              fiducialList.PointPositionDefinedEvent, self.requestNodeAddedUpdate)
-      self.observerTags.append( (fiducialList,tag) )
-      tag = fiducialList.AddObserver(
-              fiducialList.PointPositionUndefinedEvent, self.requestNodeAddedUpdate)
-      self.observerTags.append( (fiducialList,tag) )
+    for pointList in slicer.util.getNodes('vtkMRMLMarkupsFiducialNode*').values():
+      tag = pointList.AddObserver(
+              pointList.PointModifiedEvent, lambda caller,event: self.onPointMoved(caller))
+      self.observerTags.append( (pointList,tag) )
+      tag = pointList.AddObserver(
+              pointList.PointEndInteractionEvent, lambda caller,event: self.onPointEndMoving(caller))
+      self.observerTags.append( (pointList,tag) )
+      tag = pointList.AddObserver(
+              pointList.PointPositionDefinedEvent, self.requestNodeAddedUpdate)
+      self.observerTags.append( (pointList,tag) )
+      tag = pointList.AddObserver(
+              pointList.PointPositionUndefinedEvent, self.requestNodeAddedUpdate)
+      self.observerTags.append( (pointList,tag) )
 
-  def onFiducialMoved(self,fiducialList):
-    """Callback when fiducialList's point has been changed.
+  def onPointMoved(self,pointList):
+    """Callback when pointList's point has been changed.
     Check the Markups.State attribute to see if it is being
     actively moved and if so, skip the picked method."""
-    self.movingView = fiducialList.GetAttribute('Markups.MovingInSliceView')
-    movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
+    self.movingView = pointList.GetAttribute('Markups.MovingInSliceView')
+    movingIndexAttribute = pointList.GetAttribute('Markups.MovingMarkupIndex')
     if self.movingView and movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
-      if movingIndex < fiducialList.GetNumberOfDefinedControlPoints():
-        landmarkName = fiducialList.GetNthControlPointLabel(movingIndex)
+      if movingIndex < pointList.GetNumberOfDefinedControlPoints():
+        landmarkName = pointList.GetNthControlPointLabel(movingIndex)
         self.pickLandmark(landmarkName,clearMovingView=False)
         self.emit("landmarkMoved(landmarkName)", (landmarkName,))
 
-  def onFiducialEndMoving(self,fiducialList):
-    """Callback when fiducialList's point is done moving."""
-    movingIndexAttribute = fiducialList.GetAttribute('Markups.MovingMarkupIndex')
+  def onPointEndMoving(self,pointList):
+    """Callback when pointList's point is done moving."""
+    movingIndexAttribute = pointList.GetAttribute('Markups.MovingMarkupIndex')
     if movingIndexAttribute:
       movingIndex = int(movingIndexAttribute)
-      landmarkName = fiducialList.GetNthControlPointLabel(movingIndex)
+      landmarkName = pointList.GetNthControlPointLabel(movingIndex)
       self.pickLandmark(landmarkName,clearMovingView=False)
       self.emit("landmarkEndMoving(landmarkName)", (landmarkName,))
 
@@ -156,7 +156,7 @@ class LandmarksWidget(pqWidget):
     self.emit("landmarkPicked(landmarkName)", (landmarkName,))
 
   def addLandmark(self):
-    """Enable markup place mode so fiducial can be added.
+    """Enable markup place mode so point can be added.
     When the node is added it will be incorporated into the
     registration system as a landmark.
     """
@@ -180,14 +180,14 @@ class LandmarksWidget(pqWidget):
           slicer.util.mainWindow(), "Rename Landmark",
           "New name for landmark '%s'?" % self.selectedLandmark)
       if newName != "":
-        for fiducialList,index in landmarks[self.selectedLandmark]:
-          fiducialList.SetNthControlPointLabel(newName)
+        for pointList,index in landmarks[self.selectedLandmark]:
+          pointList.SetNthControlPointLabel(newName)
         self.selectedLandmark = newName
         self.updateLandmarkArray()
         self.pickLandmark(newName)
 
   def requestNodeAddedUpdate(self,caller,event):
-    """Start a SingleShot timer that will check the fiducials
+    """Start a SingleShot timer that will check the points
     in the scene and turn them into landmarks if needed"""
     if not self.pendingUpdate:
       qt.QTimer.singleShot(0, self.wrappedNodeAddedUpdate)
@@ -203,20 +203,20 @@ class LandmarksWidget(pqWidget):
           "Node Added", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
 
   def nodeAddedUpdate(self):
-    """Perform the update of any new fiducials.
-    First collect from any fiducial lists not associated with one of our
+    """Perform the update of any new points.
+    First collect from any point lists not associated with one of our
     volumes (like when the process first gets started) and then check for
-    new fiducials added to one of our lists.
-    End result should be one fiducial per list with identical names and
+    new points added to one of our lists.
+    End result should be one point per list with identical names and
     correctly assigned associated node ids.
-    Most recently created new fiducial is picked as active landmark.
+    Most recently created new point is picked as active landmark.
     """
-    if self.updatingFiducials:
+    if self.updatingPoints:
       return
     slicer.mrmlScene.StartState(slicer.mrmlScene.BatchProcessState)
-    self.updatingFiducials = True
-    addedAssociatedLandmark = self.logic.collectAssociatedFiducials(self.volumeNodes)
-    addedLandmark = self.logic.landmarksFromFiducials(self.volumeNodes)
+    self.updatingPoints = True
+    addedAssociatedLandmark = self.logic.collectAssociatedPoints(self.volumeNodes)
+    addedLandmark = self.logic.landmarksFromPoints(self.volumeNodes)
     if not addedLandmark:
       addedLandmark = addedAssociatedLandmark
     if addedLandmark:
@@ -224,6 +224,6 @@ class LandmarksWidget(pqWidget):
     self.addLandmarkObservers()
     self.updateLandmarkArray()
     self.pendingUpdate = False
-    self.updatingFiducials = False
+    self.updatingPoints = False
     slicer.mrmlScene.EndState(slicer.mrmlScene.BatchProcessState)
 

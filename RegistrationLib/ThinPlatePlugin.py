@@ -138,8 +138,8 @@ class ThinPlatePlugin(RegistrationPlugin):
     """Perform the thin plate transform using the vtkThinPlateSplineTransform class"""
 
     volumeNodes = (state.fixed, state.moving)
-    fiducialNodes = (state.fixedFiducials,state.movingFiducials)
-    points = state.logic.vtkPointsForVolumes( volumeNodes, fiducialNodes )
+    pointListNodes = (state.fixedPoints,state.movingPoints)
+    points = state.logic.vtkPointsForVolumes( volumeNodes, pointListNodes )
 
     # since this is a resample transform, source is the fixed (resampling target) space
     # and moving is the target space
