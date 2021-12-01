@@ -12,10 +12,10 @@ class RegistrationState:
   moving = None
   transformed = None
 
-  # MRML Markup Fiducial Nodes
-  fixedFiducials = None
-  movingFiducials = None
-  transformedFiducials = None
+  # MRML Markup Point List Nodes
+  fixedPoints = None
+  movingPoints = None
+  transformedPoints = None
 
   # MRML Linear Transform Node
   transform = None

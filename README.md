@@ -1,7 +1,7 @@
 LandmarkRegistration
 ====================
 
-An interactive registration tool that manages viewing and manipulating of sets of fiducials
+An interactive registration tool that manages viewing and manipulating of sets of points
 
 
 This is a work-in-progress that will ultimately be an extension or core module of 3D Slicer.
@@ -17,10 +17,10 @@ To test: You need to checkout two repositories (1) this one and (2) https://gith
 
 If you checked them out to /tmp, then you can start slicer as follows:
 
-Linux: 
+Linux:
 
  ./Slicer --additional-module-paths /tmp/CompareVolumes /tmp/LandmarkRegistration
- 
+
 (on windows you run "Slicer.exe <args>" from a console.  On mac, you use "open Slicer.app <args>")
 
 Versions
@@ -39,9 +39,9 @@ Linear:
 * scroll to the Registration area and select Linear
 * enable the Registration Active checkbox (this will create a transformed volume)
 * pick Axi/Sag/Cor in the Visualization box (this will create a custom layout with fixed on top, moving in the middle, and fixed + transformed on the bottom)
-* place a fiducial on either the fixed or moving volumes (a corresponding one will be created on the other volume)
-* drag the fiducials in the fixed and moving volumes until they are on the same anatomical location.  The blended view will update automatically on mouse release.
-* place and adjust fiducials until registration is good.
+* place a point on either the fixed or moving volumes (a corresponding one will be created on the other volume)
+* drag the points in the fixed and moving volumes until they are on the same anatomical location.  The blended view will update automatically on mouse release.
+* place and adjust points until registration is good.
 * Option: Similarity mode is Rigid + Scale and can be good for some cross-subject registration
 
 Caveats
