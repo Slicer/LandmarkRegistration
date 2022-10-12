@@ -241,8 +241,7 @@ class LocalBRAINSFitPlugin(RegistrationPlugin):
     if timing: resultStart = time.time()
     transform.GetMatrixTransformToWorld(matrix)
     matrix.Invert()
-    tp = [0,]*4
-    tp = matrix.MultiplyPoint(fixedPoint + [1,])
+    tp = matrix.MultiplyPoint([fixedPoint[0], fixedPoint[1], fixedPoint[2], 1])
     #print fixedPoint, movingPoint, tp[:3]
 
     movingList.SetNthControlPointPosition(movingIndex, tp[0], tp[1], tp[2])
