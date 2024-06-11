@@ -66,7 +66,7 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
       scenarios = ("Basic", "Affine", "ThinPlate", "VTKv6Picking", "ManyLandmarks")
       for scenario in scenarios:
         button = qt.QPushButton("Reload and Test %s" % scenario)
-        self.reloadAndTestButton.toolTip = "Reload this module and then run the %s self test." % scenario
+        button.toolTip = "Reload this module and then run the %s self test." % scenario
         self.reloadCollapsibleButton.layout().addWidget(button)
         button.connect('clicked()', lambda s=scenario: self.onReloadAndTest(scenario=s))
 
