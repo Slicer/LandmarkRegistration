@@ -132,7 +132,7 @@ class VisualizationWidget(pqWidget):
     """Turn the RevealCursor on or off
     """
     if self.revealCursor:
-      self.revealCursor.tearDown()
+      self.revealCursor.cleanup()
     if checked:
       import CompareVolumes
       self.revealCursor = CompareVolumes.LayerReveal()
