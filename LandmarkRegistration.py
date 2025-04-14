@@ -252,6 +252,35 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
         self.volumeDialogSelectors[viewName].setToolTip( "Pick the %s volume." % viewName.lower() )
         self.volumeSelectorFrame.layout().addRow("%s Volume " % viewName, self.volumeDialogSelectors[viewName])
 
+      self.volumeDialogSelectors["Transformed"] = slicer.qMRMLNodeComboBox()
+      self.volumeDialogSelectors["Transformed"].nodeTypes = (("vtkMRMLScalarVolumeNode"), "")
+      self.volumeDialogSelectors["Transformed"].selectNodeUponCreation = True
+      self.volumeDialogSelectors["Transformed"].addEnabled = True
+      self.volumeDialogSelectors["Transformed"].enabled = True
+      self.volumeDialogSelectors["Transformed"].removeEnabled = True
+      self.volumeDialogSelectors["Transformed"].noneEnabled = True
+      self.volumeDialogSelectors["Transformed"].showHidden = False
+      self.volumeDialogSelectors["Transformed"].showChildNodeTypes = True
+      self.volumeDialogSelectors["Transformed"].renameEnabled = True
+      self.volumeDialogSelectors["Transformed"].setMRMLScene(slicer.mrmlScene)
+      self.volumeDialogSelectors["Transformed"].setToolTip("Define output transformed volume")
+      self.volumeSelectorFrame.layout().addRow("Output transformed volume",
+                                               self.volumeDialogSelectors["Transformed"])
+
+      self.transformDialogSelector = slicer.qMRMLNodeComboBox()
+      self.transformDialogSelector.nodeTypes = (("vtkMRMLTransformNode"), "")
+      self.transformDialogSelector.selectNodeUponCreation = True
+      self.transformDialogSelector.addEnabled = True
+      self.transformDialogSelector.removeEnabled = True
+      self.transformDialogSelector.noneEnabled = True
+      self.transformDialogSelector.showHidden = False
+      self.transformDialogSelector.showChildNodeTypes = False
+      self.transformDialogSelector.renameEnabled = True
+      self.transformDialogSelector.setMRMLScene(slicer.mrmlScene)
+      self.transformDialogSelector.setToolTip("The transform for registration")
+      self.transformDialogSelector.enabled = True
+      self.volumeSelectorFrame.layout().addRow("Target Transform ", self.transformDialogSelector)
+
       self.volumeButtonFrame = qt.QFrame()
       self.volumeButtonFrame.objectName = 'VolumeButtonFrame'
       self.volumeButtonFrame.setLayout( qt.QHBoxLayout() )
@@ -278,14 +307,22 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
     self.volumeSelectDialog.hide()
     fixedID = self.volumeDialogSelectors['Fixed'].currentNodeID
     movingID = self.volumeDialogSelectors['Moving'].currentNodeID
+    transformedID = self.volumeDialogSelectors['Transformed'].currentNodeID
+    transformID = self.transformDialogSelector.currentNodeID
+
     if fixedID and movingID:
       self.volumeSelectors['Fixed'].setCurrentNodeID(fixedID)
       self.volumeSelectors['Moving'].setCurrentNodeID(movingID)
+      self.volumeSelectors['Transformed'].setCurrentNodeID(transformedID)
+      self.transformSelector.setCurrentNodeID(transformID)
+
       # create transform and transformed if needed
       transform = self.transformSelector.currentNode()
       if not transform:
         self.transformSelector.addNode()
         transform = self.transformSelector.currentNode()
+        self.transformDialogSelector.setCurrentNode(transform)
+
       transformed = self.volumeSelectors['Transformed'].currentNode()
       if not transformed:
         volumesLogic = slicer.modules.volumes.logic()
@@ -294,8 +331,10 @@ class LandmarkRegistrationWidget(ScriptedLoadableModuleWidget):
         transformed = slicer.mrmlScene.GetFirstNodeByName(transformedName)
         if not transformed:
           transformed = volumesLogic.CloneVolume(slicer.mrmlScene, moving, transformedName)
-        transformed.SetAndObserveTransformNodeID(transform.GetID())
+
+      transformed.SetAndObserveTransformNodeID(transform.GetID())
       self.volumeSelectors['Transformed'].setCurrentNode(transformed)
+      self.volumeDialogSelectors['Transformed'].setCurrentNode(transformed)
       self.onLayout()
       self.interfaceFrame.enabled = True
 
