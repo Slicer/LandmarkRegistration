@@ -62,7 +62,7 @@ class LandmarksWidget(pqWidget):
     for landmarkName in keys:
       row = qt.QWidget()
       rowLayout = qt.QHBoxLayout()
-      rowLayout.setMargin(0)
+      rowLayout.setContentsMargins(0, 0, 0, 0)
 
       label = qt.QLabel(landmarkName)
       rowLayout.addWidget(label, 8)
